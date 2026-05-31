@@ -5,7 +5,9 @@ import { ConnectWalletButton } from "./ConnectWalletButton";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { useAccount } from "wagmi";
 import { cn } from "@/lib/utils";
-import { BarChart2, Layers } from "lucide-react";
+import { BarChart2, Layers, ShieldCheck } from "lucide-react";
+
+const OWNER = (process.env.NEXT_PUBLIC_OWNER_ADDRESS || "").toLowerCase();
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
@@ -59,6 +61,20 @@ export function Navbar() {
               <BarChart2 className="h-3.5 w-3.5" />
               Risk
             </Link>
+            {address && address.toLowerCase() === OWNER && (
+              <Link
+                href="/cdl-adm"
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5",
+                  pathname === "/cdl-adm"
+                    ? "bg-emerald-600/20 text-emerald-400"
+                    : "text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-900/20"
+                )}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Admin
+              </Link>
+            )}
           </div>
 
           {/* Right side */}

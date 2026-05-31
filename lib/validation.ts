@@ -51,6 +51,38 @@ export const identityVerificationSchema = z.object({
   wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
 });
 
+// ── Admin (owner-only) schemas ───────────────────────────────────────────────
+
+export const adminCreatePoolSchema = z.object({
+  name: z.string().min(3).max(80),
+  target_return_bps: z.number().int().min(1).max(5000),    // 0.01% – 50%
+  min_credit_score: z.number().int().min(0).max(850),
+  max_loan_amount: z.number().min(100).max(10_000_000),
+  risk_tier: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+
+export const adminClosePoolSchema = z.object({
+  pool_id: z.string().min(1),
+  owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+
+export const adminActivateLoanSchema = z.object({
+  loan_id: z.string().min(1),
+  pool_id: z.string().min(1),
+  owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+
+export const adminMarkDefaultSchema = z.object({
+  loan_id: z.string().min(1),
+  owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+
+export const adminWithdrawFeesSchema = z.object({
+  amount_usd: z.number().min(1).max(10_000_000),
+  owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+});
+
 export const syncSchema = z.object({
   wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   action: z.enum(["profile","loan","pool","reputation","treasury"]),

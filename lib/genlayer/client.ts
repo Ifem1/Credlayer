@@ -56,6 +56,37 @@ function getUserClient(userWallet: string): GenLayerClientInstance {
   return createClient({ ...BASE_CONFIG, account });
 }
 
+// ── Owner client (privileged admin operations) ───────────────────────────────
+// Signs with the deployer's private key so self._require_owner() on the
+// contract succeeds. Required for create_pool, close_pool, activate_loan,
+// mark_default, withdraw_protocol_fees.
+
+let ownerClient: GenLayerClientInstance | null = null;
+
+function getOwnerClient(): GenLayerClientInstance {
+  if (!ownerClient) {
+    const pk = process.env.GENLAYER_OWNER_PRIVATE_KEY;
+    if (!pk || pk.trim() === "") {
+      throw new Error(
+        "GENLAYER_OWNER_PRIVATE_KEY is not set. Owner-only operations are disabled."
+      );
+    }
+    const account = createAccount(pk as `0x${string}`);
+    ownerClient = createClient({ ...BASE_CONFIG, account });
+  }
+  return ownerClient;
+}
+
+export const OWNER_ADDRESS = (
+  process.env.GENLAYER_OWNER_ADDRESS ||
+  process.env.NEXT_PUBLIC_OWNER_ADDRESS ||
+  "0x0000000000000000000000000000000000000000"
+).toLowerCase();
+
+export function isOwnerWallet(wallet: string): boolean {
+  return !!wallet && wallet.toLowerCase() === OWNER_ADDRESS;
+}
+
 // ── Contract address ─────────────────────────────────────────────────────────
 
 export const CONTRACT_ADDRESS =
@@ -89,6 +120,28 @@ export async function writeContract(
   userWallet: `0x${string}`
 ): Promise<{ hash: string }> {
   const client = getUserClient(userWallet);
+  const hash = await (client as unknown as {
+    writeContract: (params: {
+      address: `0x${string}`;
+      functionName: string;
+      args: unknown[];
+    }) => Promise<string>
+  }).writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: method,
+    args,
+  });
+  return { hash };
+}
+
+// ── Owner write helper ──────────────────────────────────────────────────────
+// Used by /api/admin/* routes for privileged operations.
+
+export async function writeAsOwner(
+  method: string,
+  args: unknown[]
+): Promise<{ hash: string }> {
+  const client = getOwnerClient();
   const hash = await (client as unknown as {
     writeContract: (params: {
       address: `0x${string}`;

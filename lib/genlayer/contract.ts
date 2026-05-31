@@ -1,4 +1,4 @@
-import { readContract, writeContract, waitForTransaction } from "./client";
+import { readContract, writeContract, writeAsOwner, waitForTransaction } from "./client";
 export { CONTRACT_ADDRESS } from "./client";
 import type {
   BorrowerProfile,
@@ -177,6 +177,46 @@ export async function withdrawLiquidity(
     [poolId, amountUsd],
     senderAddress
   );
+  return waitForTransaction(hash);
+}
+
+// ── Owner-only Methods ────────────────────────────────────────────────────────
+// Signed with GENLAYER_OWNER_PRIVATE_KEY via writeAsOwner().
+
+export async function createPool(data: {
+  name: string;
+  target_return_bps: number;
+  min_credit_score: number;
+  max_loan_amount: number;
+  risk_tier: "LOW" | "MEDIUM" | "HIGH";
+}) {
+  const hash = await writeAsOwner("create_pool", [
+    data.name,
+    data.target_return_bps,
+    data.min_credit_score,
+    data.max_loan_amount,
+    data.risk_tier,
+  ]);
+  return waitForTransaction(hash);
+}
+
+export async function closePool(poolId: string) {
+  const hash = await writeAsOwner("close_pool", [poolId]);
+  return waitForTransaction(hash);
+}
+
+export async function activateLoan(loanId: string, poolId: string) {
+  const hash = await writeAsOwner("activate_loan", [loanId, poolId]);
+  return waitForTransaction(hash);
+}
+
+export async function markLoanDefault(loanId: string) {
+  const hash = await writeAsOwner("mark_default", [loanId]);
+  return waitForTransaction(hash);
+}
+
+export async function withdrawProtocolFees(amount: number) {
+  const hash = await writeAsOwner("withdraw_protocol_fees", [amount]);
   return waitForTransaction(hash);
 }
 

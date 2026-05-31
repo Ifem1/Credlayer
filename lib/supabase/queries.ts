@@ -82,6 +82,17 @@ export async function getLoansByBorrower(wallet: string) {
   return data;
 }
 
+export async function getLoansByStatus(statuses: string[]) {
+  const db = createServiceClient();
+  const { data, error } = await (db as any)
+    .from("loans")
+    .select("*")
+    .in("status", statuses)
+    .order("created_at", { ascending: false });
+  if (error) return [];
+  return data;
+}
+
 // ── Repayments ────────────────────────────────────────────────────────────────
 
 export async function insertRepayment(record: Omit<RepaymentRecord, "id">, wallet: string) {
