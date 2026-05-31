@@ -1,0 +1,118 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { createClient, chains, createAccount } = require("genlayer-js");
+const crypto = require("crypto");
+
+type GenLayerClientInstance = ReturnType<typeof createClient>;
+
+// ── Chain selection ──────────────────────────────────────────────────────────
+
+function getChain() {
+  const name = process.env.GENLAYER_CHAIN || "localnet";
+  if (name === "studionet") return chains.studionet;
+  if (name === "testnetAsimov") return chains.testnetAsimov;
+  if (name === "testnetBradbury") return chains.testnetBradbury;
+  return chains.localnet;
+}
+
+const BASE_CONFIG = {
+  chain: getChain(),
+  endpoint: process.env.GENLAYER_RPC_URL || "http://localhost:4000/api",
+};
+
+// ── Read-only singleton client (no account needed) ───────────────────────────
+
+let readClient: GenLayerClientInstance | null = null;
+
+function getReadClient(): GenLayerClientInstance {
+  if (!readClient) {
+    readClient = createClient(BASE_CONFIG);
+  }
+  return readClient;
+}
+
+// ── Per-user account derivation ───────────────────────────────────────────────
+// Each user wallet gets a deterministic private key derived from the master secret.
+// This ensures the GenLayer contract's self._caller() always maps to the same
+// address for a given user wallet — enabling true multi-user support.
+
+function derivePrivateKeyForWallet(userWallet: string): `0x${string}` {
+  const master = process.env.GENLAYER_PRIVATE_KEY || "default-insecure-secret";
+  const hash = crypto
+    .createHmac("sha256", master)
+    .update(userWallet.toLowerCase())
+    .digest("hex");
+  return `0x${hash}` as `0x${string}`;
+}
+
+export function deriveGenLayerAddress(userWallet: string): string {
+  const pk = derivePrivateKeyForWallet(userWallet);
+  const account = createAccount(pk);
+  return account.address as string;
+}
+
+function getUserClient(userWallet: string): GenLayerClientInstance {
+  const pk = derivePrivateKeyForWallet(userWallet);
+  const account = createAccount(pk);
+  return createClient({ ...BASE_CONFIG, account });
+}
+
+// ── Contract address ─────────────────────────────────────────────────────────
+
+export const CONTRACT_ADDRESS =
+  (process.env.GENLAYER_CONTRACT_ADDRESS as `0x${string}`) ||
+  ("0x0000000000000000000000000000000000000000" as `0x${string}`);
+
+// ── Read (view) helper ───────────────────────────────────────────────────────
+
+export async function readContract<T>(
+  method: string,
+  args: unknown[] = []
+): Promise<T> {
+  const gl = getReadClient();
+  const result = await (gl as unknown as {
+    readContract: (params: { address: `0x${string}`; functionName: string; args: unknown[] }) => Promise<unknown>
+  }).readContract({
+    address: CONTRACT_ADDRESS,
+    functionName: method,
+    args,
+  });
+  return result as T;
+}
+
+// ── Write helper ─────────────────────────────────────────────────────────────
+// Uses a per-user derived account so the contract's self._caller() maps to
+// a unique, stable address per user wallet.
+
+export async function writeContract(
+  method: string,
+  args: unknown[],
+  userWallet: `0x${string}`
+): Promise<{ hash: string }> {
+  const client = getUserClient(userWallet);
+  const hash = await (client as unknown as {
+    writeContract: (params: {
+      address: `0x${string}`;
+      functionName: string;
+      args: unknown[];
+    }) => Promise<string>
+  }).writeContract({
+    address: CONTRACT_ADDRESS,
+    functionName: method,
+    args,
+  });
+  return { hash };
+}
+
+// ── Wait for consensus ───────────────────────────────────────────────────────
+
+export async function waitForTransaction(txResult: { hash: string }): Promise<{ hash: string; return_value: unknown }> {
+  const gl = getReadClient();
+  try {
+    const receipt = await (gl as unknown as {
+      waitForTransactionReceipt: (params: { hash: string; retries?: number }) => Promise<{ hash: string; return_value: unknown }>
+    }).waitForTransactionReceipt({ hash: txResult.hash, retries: 20 });
+    return receipt;
+  } catch {
+    return { hash: txResult.hash, return_value: null };
+  }
+}
