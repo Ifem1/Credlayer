@@ -6,12 +6,15 @@ import type { LiquidityPool } from "@/types";
 interface Props {
   pools: LiquidityPool[];
   wallet?: string;
+  onSuccess?: () => void; // bubble up to parent so it can refresh balances
 }
 
-export function PoolBoard({ pools, wallet }: Props) {
+export function PoolBoard({ pools, wallet, onSuccess }: Props) {
   const [filter, setFilter] = useState<"ALL" | "LOW" | "MEDIUM" | "HIGH">("ALL");
 
-  const filtered = pools.filter((p) => filter === "ALL" || p.risk_tier === filter);
+  const filtered = pools.filter(
+    (p) => filter === "ALL" || p.risk_tier === filter
+  );
 
   return (
     <div className="space-y-6">
@@ -30,6 +33,7 @@ export function PoolBoard({ pools, wallet }: Props) {
           </button>
         ))}
       </div>
+
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-slate-500">No pools found</div>
       ) : (
@@ -38,16 +42,11 @@ export function PoolBoard({ pools, wallet }: Props) {
             <PoolCard
               key={pool.pool_id}
               pool={pool}
-              onDeposit={() => {
-                const amount = Number(window.prompt("Enter deposit amount (USD):"));
-                if (amount > 0 && wallet) {
-                  fetch("/api/pool/deposit", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ pool_id: pool.pool_id, amount_usd: amount, wallet }),
-                  });
-                }
-              }}
+              wallet={wallet}
+              userDeposit={
+                wallet ? pool.depositors?.[wallet] ?? 0 : 0
+              }
+              onSuccess={onSuccess}
             />
           ))}
         </div>

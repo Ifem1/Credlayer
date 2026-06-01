@@ -15,19 +15,22 @@ export default function LenderDashboard() {
   const [proofs, setProofs] = useState<ProofEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  async function fetchData() {
+    const [poolRes, proofRes] = await Promise.all([
+      fetch("/api/pool/all").then((r) => r.json()),
+      address
+        ? fetch(`/api/profile/${address}`).then((r) => r.json())
+        : Promise.resolve(null),
+    ]);
+    if (poolRes.success) setPools(poolRes.data);
+    if (proofRes?.success) setProofs(proofRes.data.proofs || []);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    const fetchData = async () => {
-      const [poolRes, proofRes] = await Promise.all([
-        fetch("/api/pool/all").then((r) => r.json()),
-        address
-          ? fetch(`/api/profile/${address}`).then((r) => r.json())
-          : Promise.resolve(null),
-      ]);
-      if (poolRes.success) setPools(poolRes.data);
-      if (proofRes?.success) setProofs(proofRes.data.proofs || []);
-      setLoading(false);
-    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address]);
 
   if (!isConnected) {
@@ -124,7 +127,7 @@ export default function LenderDashboard() {
                 <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
               </div>
             ) : (
-              <PoolBoard pools={pools} wallet={address} />
+              <PoolBoard pools={pools} wallet={address} onSuccess={fetchData} />
             )}
           </div>
         </div>

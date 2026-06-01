@@ -10,13 +10,18 @@ export default function ExplorePage() {
   const [pools, setPools] = useState<LiquidityPool[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  function loadPools() {
     fetch("/api/pool/all")
       .then((r) => r.json())
       .then((d) => {
         if (d.success) setPools(d.data);
       })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadPools();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -61,7 +66,7 @@ export default function ExplorePage() {
           <p>No active pools. Check back soon.</p>
         </div>
       ) : (
-        <PoolBoard pools={pools} wallet={address} />
+        <PoolBoard pools={pools} wallet={address} onSuccess={loadPools} />
       )}
     </div>
   );
