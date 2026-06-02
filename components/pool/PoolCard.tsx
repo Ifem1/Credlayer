@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { formatPercent, cn } from "@/lib/utils";
+import { formatPercent, formatGEN, weiToGen, cn } from "@/lib/utils";
 import type { LiquidityPool } from "@/types";
 import {
   TrendingUp,
@@ -32,8 +32,29 @@ const riskColors: Record<string, string> = {
   HIGH: "text-orange-400 bg-orange-400/10 border-orange-400/20",
 };
 
-function formatGEN(amount: number) {
-  return `${amount.toLocaleString()} GEN`;
+// Resolve pool amounts — prefer wei fields from new contract, fall back to legacy numbers
+function poolLiquidity(pool: LiquidityPool) {
+  const totalDep = pool.total_deposited_wei
+    ? weiToGen(pool.total_deposited_wei)
+    : pool.total_deposited;
+  const available = pool.available_liquidity_wei
+    ? weiToGen(pool.available_liquidity_wei)
+    : pool.available_liquidity;
+  const borrowed = pool.total_borrowed_wei
+    ? weiToGen(pool.total_borrowed_wei)
+    : pool.total_borrowed;
+  return { totalDep, available, borrowed };
+}
+
+function userDepositGEN(pool: LiquidityPool, wallet?: string): number {
+  if (!wallet) return 0;
+  // new contract: depositors_wei is { wallet: weiString }
+  if (pool.depositors_wei) {
+    const raw = pool.depositors_wei[wallet];
+    return raw ? weiToGen(raw) : 0;
+  }
+  // legacy
+  return pool.depositors?.[wallet] ?? 0;
 }
 
 // Maps a deposit/withdraw status to a user-friendly label + icon
@@ -65,10 +86,9 @@ function StatusIndicator({ status }: { status: DepositStatus | WithdrawStatus | 
 type Mode = "idle" | "deposit" | "withdraw";
 
 export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
-  const utilization =
-    pool.total_deposited > 0
-      ? (pool.total_borrowed / pool.total_deposited) * 100
-      : 0;
+  const { totalDep, available, borrowed } = poolLiquidity(pool);
+  const resolvedUserDeposit = userDepositGEN(pool, wallet) || userDeposit;
+  const utilization = totalDep > 0 ? (borrowed / totalDep) * 100 : 0;
   const apy = pool.target_return_bps / 100;
 
   const [mode, setMode] = useState<Mode>("idle");
@@ -108,7 +128,7 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
     const usd = Number(amount);
     if (!wallet) return;
     if (!usd || usd <= 0) return;
-    if (usd > userDeposit) return;
+    if (usd > resolvedUserDeposit) return;
     try {
       await withdrawHook.withdraw(pool.pool_id, pool.name, usd, wallet);
       setAmount("");
@@ -164,15 +184,23 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
           </div>
         </div>
 
-        {/* Pool stats — GEN denomination */}
+        {/* Pool stats — GEN denomination (wei-aware) */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-slate-400">Total Liquidity</span>
-            <span className="text-slate-200">{formatGEN(pool.total_deposited)}</span>
+            <span className="text-slate-200">
+              {pool.total_deposited_wei
+                ? formatGEN(pool.total_deposited_wei)
+                : `${totalDep.toLocaleString()} GEN`}
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-slate-400">Available</span>
-            <span className="text-emerald-400">{formatGEN(pool.available_liquidity)}</span>
+            <span className="text-emerald-400">
+              {pool.available_liquidity_wei
+                ? formatGEN(pool.available_liquidity_wei)
+                : `${available.toLocaleString()} GEN`}
+            </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-slate-400">Active Loans</span>
@@ -197,10 +225,10 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
         </div>
 
         {/* My deposit badge */}
-        {userDeposit > 0 && (
+        {resolvedUserDeposit > 0 && (
           <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-2 text-center">
             <p className="text-xs text-slate-400">Your Deposit</p>
-            <p className="text-sm font-bold text-blue-400">{formatGEN(userDeposit)}</p>
+            <p className="text-sm font-bold text-blue-400">{resolvedUserDeposit.toLocaleString(undefined, {maximumFractionDigits: 4})} GEN</p>
           </div>
         )}
 
@@ -220,7 +248,7 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
             Deposit GEN
             {mode === "deposit" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
-          {userDeposit > 0 && (
+          {resolvedUserDeposit > 0 && (
             <button
               onClick={() => toggleMode("withdraw")}
               disabled={isBusy}
@@ -263,10 +291,10 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
                   className="flex-1 h-9 rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   autoFocus
                 />
-                {mode === "withdraw" && userDeposit > 0 && (
+                {mode === "withdraw" && resolvedUserDeposit > 0 && (
                   <button
                     type="button"
-                    onClick={() => setAmount(String(userDeposit))}
+                    onClick={() => setAmount(String(resolvedUserDeposit))}
                     disabled={activeBusy}
                     className="rounded-lg border border-slate-700 px-2.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-50"
                   >

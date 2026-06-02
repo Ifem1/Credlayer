@@ -113,24 +113,26 @@ export async function readContract<T>(
 // ── Write helper ─────────────────────────────────────────────────────────────
 // Uses a per-user derived account so the contract's self._caller() maps to
 // a unique, stable address per user wallet.
+// Pass `value` (in wei as bigint) for @gl.public.write.payable functions.
 
 export async function writeContract(
   method: string,
   args: unknown[],
-  userWallet: `0x${string}`
+  userWallet: `0x${string}`,
+  value?: bigint
 ): Promise<{ hash: string }> {
   const client = getUserClient(userWallet);
+  const params: {
+    address: `0x${string}`;
+    functionName: string;
+    args: unknown[];
+    value?: bigint;
+  } = { address: CONTRACT_ADDRESS, functionName: method, args };
+  if (value !== undefined) params.value = value;
+
   const hash = await (client as unknown as {
-    writeContract: (params: {
-      address: `0x${string}`;
-      functionName: string;
-      args: unknown[];
-    }) => Promise<string>
-  }).writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: method,
-    args,
-  });
+    writeContract: (p: typeof params) => Promise<string>;
+  }).writeContract(params);
   return { hash };
 }
 
@@ -139,20 +141,21 @@ export async function writeContract(
 
 export async function writeAsOwner(
   method: string,
-  args: unknown[]
+  args: unknown[],
+  value?: bigint
 ): Promise<{ hash: string }> {
   const client = getOwnerClient();
+  const params: {
+    address: `0x${string}`;
+    functionName: string;
+    args: unknown[];
+    value?: bigint;
+  } = { address: CONTRACT_ADDRESS, functionName: method, args };
+  if (value !== undefined) params.value = value;
+
   const hash = await (client as unknown as {
-    writeContract: (params: {
-      address: `0x${string}`;
-      functionName: string;
-      args: unknown[];
-    }) => Promise<string>
-  }).writeContract({
-    address: CONTRACT_ADDRESS,
-    functionName: method,
-    args,
-  });
+    writeContract: (p: typeof params) => Promise<string>;
+  }).writeContract(params);
   return { hash };
 }
 

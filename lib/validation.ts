@@ -79,7 +79,8 @@ export const adminMarkDefaultSchema = z.object({
 });
 
 export const adminWithdrawFeesSchema = z.object({
-  amount_usd: z.number().min(1).max(10_000_000),
+  amount_gen: z.number().min(0.000001),   // GEN amount — converted to wei server-side
+  recipient: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid recipient address"),
   owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
 });
 

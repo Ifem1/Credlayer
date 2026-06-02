@@ -115,6 +115,43 @@ export function reputationTierToLevel(tier: string): number {
   return levels[tier] ?? 0;
 }
 
+// ── GEN / Wei conversion (1 GEN = 10^18 wei) ─────────────────────────────────
+
+/** Convert a GEN amount (decimal, e.g. 1.5) → wei as bigint */
+export function genToWei(gen: number): bigint {
+  // Use string arithmetic to avoid floating-point precision loss
+  const fixed = gen.toFixed(18);
+  const [whole, dec = ""] = fixed.split(".");
+  const paddedDec = dec.padEnd(18, "0").slice(0, 18);
+  return BigInt(whole) * BigInt("1000000000000000000") + BigInt(paddedDec);
+}
+
+/** Convert wei (string|number|bigint) → GEN as a JS number */
+export function weiToGen(wei: string | number | bigint): number {
+  const w = BigInt(wei);
+  const wholePart = w / BigInt("1000000000000000000");
+  const fracPart  = w % BigInt("1000000000000000000");
+  return Number(wholePart) + Number(fracPart) / 1e18;
+}
+
+/** Format wei as a human-readable GEN string */
+export function formatGEN(wei: string | number | bigint | null | undefined): string {
+  if (wei === null || wei === undefined || wei === "" || wei === 0 || wei === "0") return "0 GEN";
+  try {
+    const gen = weiToGen(BigInt(String(wei)));
+    if (gen === 0) return "0 GEN";
+    if (gen < 0.0001) return `<0.0001 GEN`;
+    return `${gen.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 })} GEN`;
+  } catch {
+    return "— GEN";
+  }
+}
+
+/** Bigint → hex string suitable for JSON transport and contract value field */
+export function weiToHex(wei: bigint): string {
+  return "0x" + wei.toString(16);
+}
+
 export function interestLabel(rate: number): string {
   if (rate < 7) return "Excellent";
   if (rate < 10) return "Good";

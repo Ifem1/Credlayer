@@ -3,7 +3,7 @@ import { adminWithdrawFeesSchema } from "@/lib/validation";
 import { assertOwner } from "@/lib/admin-guard";
 import { withdrawProtocolFees } from "@/lib/genlayer/contract";
 import { insertProof, writeAuditLog } from "@/lib/supabase/queries";
-import { computeProofHash } from "@/lib/utils";
+import { computeProofHash, genToWei } from "@/lib/utils";
 import { CONTRACT_ADDRESS } from "@/lib/genlayer/client";
 
 export async function POST(req: NextRequest) {
@@ -23,31 +23,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: guard.reason }, { status: 403 });
     }
 
-    const receipt = await withdrawProtocolFees(data.amount_usd);
+    const amountWei = genToWei(data.amount_gen);
+    const receipt = await withdrawProtocolFees(amountWei, data.recipient);
     const txHash = receipt?.hash || "pending";
 
     const proofHash = computeProofHash({
       action: "fees_withdrawn",
-      amount: data.amount_usd,
+      amount_gen: data.amount_gen,
+      amount_wei: amountWei.toString(),
+      recipient: data.recipient,
       timestamp: new Date().toISOString(),
     });
 
     await insertProof({
-      wallet: data.owner_wallet,
-      action: "fees_withdrawn",
-      contract_address: CONTRACT_ADDRESS,
-      tx_hash: txHash,
+      wallet: data.owner_wallet, action: "fees_withdrawn",
+      contract_address: CONTRACT_ADDRESS, tx_hash: txHash,
       state_before: "fees_held",
-      state_after: `fees_withdrawn:${data.amount_usd}`,
+      state_after: `fees_withdrawn:${data.amount_gen}_GEN_to_${data.recipient}`,
       proof_hash: proofHash,
     });
 
     await writeAuditLog({
-      wallet: data.owner_wallet,
-      action: "admin_withdraw_fees",
-      entity_type: "treasury",
-      entity_id: "protocol_fees",
-      details: { amount_usd: data.amount_usd },
+      wallet: data.owner_wallet, action: "admin_withdraw_fees",
+      entity_type: "treasury", entity_id: "protocol_fees",
+      details: {
+        amount_gen: data.amount_gen,
+        amount_wei: amountWei.toString(),
+        recipient: data.recipient,
+      },
     });
 
     return NextResponse.json({ success: true, data: { tx_hash: txHash } });

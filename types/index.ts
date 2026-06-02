@@ -150,13 +150,21 @@ export interface LiquidityPool {
   name: string;
   target_return_bps: number;
   min_credit_score: number;
+  // Legacy numeric fields (kept for Supabase cache compatibility)
   max_loan_amount: number;
-  risk_tier: PoolRiskTier;
-  status: PoolStatus;
   total_deposited: number;
   available_liquidity: number;
   total_borrowed: number;
   total_repaid: number;
+  // Wei string fields from new contract (real GEN movement)
+  max_loan_amount_wei?: string;
+  total_deposited_wei?: string;
+  available_liquidity_wei?: string;
+  total_borrowed_wei?: string;
+  total_repaid_wei?: string;
+  depositors_wei?: Record<string, string>;
+  risk_tier: PoolRiskTier;
+  status: PoolStatus;
   active_loans: number;
   depositors: Record<string, number>;
   created_at: string;

@@ -141,40 +141,45 @@ export async function cancelLoanRequest(
   return waitForTransaction(hash);
 }
 
+// repay_loan is now @gl.public.write.payable — amount comes from gl.message.value
 export async function repayLoan(
   loanId: string,
-  amountUsd: number,
+  amountWei: bigint,           // sent as transaction value, NOT an arg
   senderAddress: `0x${string}`
 ) {
   const hash = await writeContract(
     "repay_loan",
-    [loanId, amountUsd],
-    senderAddress
+    [loanId],                  // only loan_id as arg
+    senderAddress,
+    amountWei                  // wei value attached to tx
   );
   return waitForTransaction(hash);
 }
 
+// deposit_liquidity is now @gl.public.write.payable — amount = gl.message.value
 export async function depositLiquidity(
   poolId: string,
-  amountUsd: number,
+  amountWei: bigint,           // sent as transaction value, NOT an arg
   senderAddress: `0x${string}`
 ) {
   const hash = await writeContract(
     "deposit_liquidity",
-    [poolId, amountUsd],
-    senderAddress
+    [poolId],                  // only pool_id as arg
+    senderAddress,
+    amountWei                  // wei value attached to tx
   );
   return waitForTransaction(hash);
 }
 
+// withdraw_liquidity — sends real GEN back; amount_wei is an arg (not payable)
 export async function withdrawLiquidity(
   poolId: string,
-  amountUsd: number,
+  amountWei: bigint,
   senderAddress: `0x${string}`
 ) {
   const hash = await writeContract(
     "withdraw_liquidity",
-    [poolId, amountUsd],
+    [poolId, amountWei],
     senderAddress
   );
   return waitForTransaction(hash);
@@ -215,8 +220,9 @@ export async function markLoanDefault(loanId: string) {
   return waitForTransaction(hash);
 }
 
-export async function withdrawProtocolFees(amount: number) {
-  const hash = await writeAsOwner("withdraw_protocol_fees", [amount]);
+// withdraw_protocol_fees(amount_wei, recipient) — owner only, sends real GEN
+export async function withdrawProtocolFees(amountWei: bigint, recipient: string) {
+  const hash = await writeAsOwner("withdraw_protocol_fees", [amountWei, recipient]);
   return waitForTransaction(hash);
 }
 
