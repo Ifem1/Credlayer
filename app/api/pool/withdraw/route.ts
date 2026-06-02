@@ -4,23 +4,8 @@ import { withdrawLiquidity, getPool } from "@/lib/genlayer/contract";
 import { upsertPool, insertProof, writeAuditLog, insertTransaction } from "@/lib/supabase/queries";
 import { computeProofHash } from "@/lib/utils";
 import { CONTRACT_ADDRESS } from "@/lib/genlayer/client";
-import { verifyTypedData } from "viem";
-
-const DOMAIN = {
-  name: "CredLayer",
-  version: "1",
-  chainId: 61999,
-} as const;
-
-const WITHDRAW_TYPES = {
-  WithdrawAuthorization: [
-    { name: "pool_id",    type: "string" },
-    { name: "pool_name",  type: "string" },
-    { name: "amount_gen", type: "uint256" },
-    { name: "wallet",     type: "address" },
-    { name: "timestamp",  type: "uint256" },
-  ],
-} as const;
+import { verifyMessage } from "viem";
+import { buildWithdrawMessage } from "@/lib/pool-auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,24 +20,17 @@ export async function POST(req: NextRequest) {
 
     const { pool_id, amount_usd, wallet } = parsed.data;
 
-    // ── Verify wallet signature if provided ───────────────────────────────
+    // ── Verify wallet signature ────────────────────────────────────────────
     if (body.signature && body.timestamp) {
       try {
-        const poolForVerify = await getPool(pool_id).catch(() => null);
-        const poolName = poolForVerify?.name ?? "";
+        const poolName: string = typeof body.pool_name === "string" ? body.pool_name : "";
+        const timestamp: number = Number(body.timestamp);
 
-        const valid = await verifyTypedData({
+        const message = buildWithdrawMessage(pool_id, poolName, amount_usd, wallet, timestamp);
+
+        const valid = await verifyMessage({
           address: wallet as `0x${string}`,
-          domain: DOMAIN,
-          types: WITHDRAW_TYPES,
-          primaryType: "WithdrawAuthorization",
-          message: {
-            pool_id,
-            pool_name: poolName,
-            amount_gen: BigInt(amount_usd),
-            wallet: wallet as `0x${string}`,
-            timestamp: BigInt(body.timestamp),
-          },
+          message,
           signature: body.signature as `0x${string}`,
         });
 
@@ -63,7 +41,7 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const age = Math.floor(Date.now() / 1000) - Number(body.timestamp);
+        const age = Math.floor(Date.now() / 1000) - timestamp;
         if (age > 300) {
           return NextResponse.json(
             { success: false, error: "Signature expired. Please try again." },
@@ -71,7 +49,7 @@ export async function POST(req: NextRequest) {
           );
         }
       } catch (sigErr) {
-        console.warn("Signature verification failed:", sigErr);
+        console.warn("Signature verification error:", sigErr);
         return NextResponse.json(
           { success: false, error: "Signature verification failed." },
           { status: 403 }

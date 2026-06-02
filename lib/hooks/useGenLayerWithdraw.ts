@@ -1,12 +1,7 @@
 "use client";
-/**
- * useGenLayerWithdraw
- *
- * Withdraw flow — same signTypedData pattern as deposit.
- */
-
 import { useState, useCallback } from "react";
-import { useSignTypedData } from "wagmi";
+import { useSignMessage } from "wagmi";
+import { buildWithdrawMessage } from "@/lib/pool-auth";
 
 export type WithdrawStatus =
   | "idle"
@@ -21,21 +16,7 @@ interface WithdrawState {
   error: string;
 }
 
-const DOMAIN = {
-  name: "CredLayer",
-  version: "1",
-  chainId: 61999,
-} as const;
-
-const WITHDRAW_TYPES = {
-  WithdrawAuthorization: [
-    { name: "pool_id",    type: "string" },
-    { name: "pool_name",  type: "string" },
-    { name: "amount_gen", type: "uint256" },
-    { name: "wallet",     type: "address" },
-    { name: "timestamp",  type: "uint256" },
-  ],
-} as const;
+export { buildWithdrawMessage };
 
 export function useGenLayerWithdraw() {
   const [state, setState] = useState<WithdrawState>({
@@ -44,27 +25,17 @@ export function useGenLayerWithdraw() {
     error: "",
   });
 
-  const { signTypedDataAsync } = useSignTypedData();
+  const { signMessageAsync } = useSignMessage();
 
   const withdraw = useCallback(
     async (poolId: string, poolName: string, amountGEN: number, wallet: string) => {
       setState({ status: "awaiting-signature", txHash: "", error: "" });
 
       try {
-        const timestamp = BigInt(Math.floor(Date.now() / 1000));
+        const timestamp = Math.floor(Date.now() / 1000);
+        const message = buildWithdrawMessage(poolId, poolName, amountGEN, wallet, timestamp);
 
-        const signature = await signTypedDataAsync({
-          domain: DOMAIN,
-          types: WITHDRAW_TYPES,
-          primaryType: "WithdrawAuthorization",
-          message: {
-            pool_id: poolId,
-            pool_name: poolName,
-            amount_gen: BigInt(amountGEN),
-            wallet: wallet as `0x${string}`,
-            timestamp,
-          },
-        });
+        const signature = await signMessageAsync({ message });
 
         setState((s) => ({ ...s, status: "processing" }));
 
@@ -73,10 +44,11 @@ export function useGenLayerWithdraw() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pool_id: poolId,
+            pool_name: poolName,
             amount_usd: amountGEN,
             wallet,
             signature,
-            timestamp: timestamp.toString(),
+            timestamp,
           }),
         });
 
@@ -87,11 +59,7 @@ export function useGenLayerWithdraw() {
           );
         }
 
-        setState({
-          status: "success",
-          txHash: data.data?.tx_hash || "",
-          error: "",
-        });
+        setState({ status: "success", txHash: data.data?.tx_hash || "", error: "" });
         return data.data?.tx_hash as string;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Withdrawal failed";
@@ -99,7 +67,7 @@ export function useGenLayerWithdraw() {
         throw err;
       }
     },
-    [signTypedDataAsync]
+    [signMessageAsync]
   );
 
   function reset() {

@@ -158,8 +158,8 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
               {formatPercent(apy)}
             </p>
           </div>
-          <div className="rounded-lg bg-slate-800/50 p-3 text-center">
-            <p className="text-xs text-slate-400">Min Credit</p>
+          <div className="rounded-lg bg-slate-800/50 p-3 text-center" title="Minimum borrower credit score required to take a loan from this pool">
+            <p className="text-xs text-slate-400">Min Borrower Score</p>
             <p className="text-xl font-bold text-slate-200">{pool.min_credit_score}</p>
           </div>
         </div>
