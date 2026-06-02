@@ -1,19 +1,17 @@
 "use client";
 /**
  * useGenLayerWithdraw
- * Same flow as deposit but calls withdraw_liquidity.
+ *
+ * Withdraw flow — same signTypedData pattern as deposit.
  */
 
 import { useState, useCallback } from "react";
-import { GENLAYER_CHAIN_PARAMS } from "@/lib/wagmi/config";
+import { useSignTypedData } from "wagmi";
 
 export type WithdrawStatus =
   | "idle"
-  | "adding-network"
-  | "switching-network"
-  | "awaiting-confirmation"
-  | "pending-consensus"
-  | "syncing"
+  | "awaiting-signature"
+  | "processing"
   | "success"
   | "error";
 
@@ -23,24 +21,21 @@ interface WithdrawState {
   error: string;
 }
 
-const CA = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ||
-  "0x0000000000000000000000000000000000000000") as `0x${string}`;
+const DOMAIN = {
+  name: "CredLayer",
+  version: "1",
+  chainId: 61999,
+} as const;
 
-async function ensureGenLayerNetwork() {
-  const ethereum = (window as unknown as { ethereum?: { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
-  if (!ethereum) throw new Error("No wallet found. Please install MetaMask.");
-  try {
-    await ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [GENLAYER_CHAIN_PARAMS],
-    });
-  } catch {
-    await ethereum.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: GENLAYER_CHAIN_PARAMS.chainId }],
-    });
-  }
-}
+const WITHDRAW_TYPES = {
+  WithdrawAuthorization: [
+    { name: "pool_id",    type: "string" },
+    { name: "pool_name",  type: "string" },
+    { name: "amount_gen", type: "uint256" },
+    { name: "wallet",     type: "address" },
+    { name: "timestamp",  type: "uint256" },
+  ],
+} as const;
 
 export function useGenLayerWithdraw() {
   const [state, setState] = useState<WithdrawState>({
@@ -49,70 +44,62 @@ export function useGenLayerWithdraw() {
     error: "",
   });
 
+  const { signTypedDataAsync } = useSignTypedData();
+
   const withdraw = useCallback(
-    async (poolId: string, amountGEN: number, wallet: string) => {
-      setState({ status: "adding-network", txHash: "", error: "" });
+    async (poolId: string, poolName: string, amountGEN: number, wallet: string) => {
+      setState({ status: "awaiting-signature", txHash: "", error: "" });
 
       try {
-        setState((s) => ({ ...s, status: "adding-network" }));
-        await ensureGenLayerNetwork();
+        const timestamp = BigInt(Math.floor(Date.now() / 1000));
 
-        setState((s) => ({ ...s, status: "switching-network" }));
-        await new Promise((r) => setTimeout(r, 300));
-
-        setState((s) => ({ ...s, status: "awaiting-confirmation" }));
-
-        const { createClient, chains } = await import("genlayer-js");
-        const glClient = createClient({
-          chain: chains.studionet,
-          endpoint: "https://studio.genlayer.com/api",
-          account: wallet as `0x${string}`,
+        const signature = await signTypedDataAsync({
+          domain: DOMAIN,
+          types: WITHDRAW_TYPES,
+          primaryType: "WithdrawAuthorization",
+          message: {
+            pool_id: poolId,
+            pool_name: poolName,
+            amount_gen: BigInt(amountGEN),
+            wallet: wallet as `0x${string}`,
+            timestamp,
+          },
         });
 
-        const hash = await (glClient as unknown as {
-          writeContract: (p: {
-            address: `0x${string}`;
-            functionName: string;
-            args: unknown[];
-          }) => Promise<string>;
-        }).writeContract({
-          address: CA,
-          functionName: "withdraw_liquidity",
-          args: [poolId, amountGEN],
-        });
+        setState((s) => ({ ...s, status: "processing" }));
 
-        setState((s) => ({ ...s, status: "pending-consensus", txHash: hash }));
-
-        await (glClient as unknown as {
-          waitForTransactionReceipt: (p: { hash: string; retries?: number }) => Promise<unknown>;
-        }).waitForTransactionReceipt({ hash, retries: 25 });
-
-        setState((s) => ({ ...s, status: "syncing" }));
-        const syncRes = await fetch("/api/pool/withdraw/sync", {
+        const res = await fetch("/api/pool/withdraw", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pool_id: poolId,
             amount_usd: amountGEN,
             wallet,
-            tx_hash: hash,
+            signature,
+            timestamp: timestamp.toString(),
           }),
         });
-        const syncData = await syncRes.json();
-        if (!syncData.success) {
-          console.warn("Supabase sync failed (non-fatal):", syncData.error);
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(
+            typeof data.error === "string" ? data.error : "Withdrawal failed"
+          );
         }
 
-        setState((s) => ({ ...s, status: "success" }));
-        return hash;
+        setState({
+          status: "success",
+          txHash: data.data?.tx_hash || "",
+          error: "",
+        });
+        return data.data?.tx_hash as string;
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Withdrawal failed";
+        const message = err instanceof Error ? err.message : "Withdrawal failed";
         setState({ status: "error", txHash: "", error: message });
         throw err;
       }
     },
-    []
+    [signTypedDataAsync]
   );
 
   function reset() {

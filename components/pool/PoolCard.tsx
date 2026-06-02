@@ -13,7 +13,6 @@ import {
   ChevronUp,
   Loader2,
   Wallet,
-  Network,
   Send,
   Clock,
 } from "lucide-react";
@@ -41,29 +40,14 @@ function formatGEN(amount: number) {
 function StatusIndicator({ status }: { status: DepositStatus | WithdrawStatus | "idle" }) {
   const steps: { statuses: string[]; icon: React.ReactNode; label: string }[] = [
     {
-      statuses: ["adding-network"],
-      icon: <Network className="h-3.5 w-3.5 animate-pulse" />,
-      label: "Adding GenLayer network to wallet…",
-    },
-    {
-      statuses: ["switching-network"],
-      icon: <Network className="h-3.5 w-3.5 animate-pulse" />,
-      label: "Switching to GenLayer Studionet…",
-    },
-    {
-      statuses: ["awaiting-confirmation"],
+      statuses: ["awaiting-signature"],
       icon: <Wallet className="h-3.5 w-3.5 animate-bounce" />,
-      label: "Confirm the transaction in your wallet…",
+      label: "Check your wallet — sign to authorise…",
     },
     {
-      statuses: ["pending-consensus"],
+      statuses: ["processing"],
       icon: <Clock className="h-3.5 w-3.5 animate-spin" />,
-      label: "Waiting for GenLayer validator consensus…",
-    },
-    {
-      statuses: ["syncing"],
-      icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-      label: "Recording proof on-chain…",
+      label: "Submitting to GenLayer — awaiting consensus…",
     },
   ];
 
@@ -93,8 +77,8 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
   const depositHook = useGenLayerDeposit();
   const withdrawHook = useGenLayerWithdraw();
 
-  const isDepositBusy = !["idle", "error", "success"].includes(depositHook.status);
-  const isWithdrawBusy = !["idle", "error", "success"].includes(withdrawHook.status);
+  const isDepositBusy = depositHook.status === "awaiting-signature" || depositHook.status === "processing";
+  const isWithdrawBusy = withdrawHook.status === "awaiting-signature" || withdrawHook.status === "processing";
   const isBusy = isDepositBusy || isWithdrawBusy;
 
   function toggleMode(next: Mode) {
@@ -108,15 +92,14 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
   async function handleDeposit(e: React.FormEvent) {
     e.preventDefault();
     const usd = Number(amount);
-    if (!wallet) { return; }
+    if (!wallet) return;
     if (!usd || usd <= 0) return;
-
     try {
-      await depositHook.deposit(pool.pool_id, usd, wallet);
+      await depositHook.deposit(pool.pool_id, pool.name, usd, wallet);
       setAmount("");
       onSuccess?.();
     } catch {
-      // error already in hook state
+      // error captured in hook state
     }
   }
 
@@ -126,13 +109,12 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
     if (!wallet) return;
     if (!usd || usd <= 0) return;
     if (usd > userDeposit) return;
-
     try {
-      await withdrawHook.withdraw(pool.pool_id, usd, wallet);
+      await withdrawHook.withdraw(pool.pool_id, pool.name, usd, wallet);
       setAmount("");
       onSuccess?.();
     } catch {
-      // error already in hook state
+      // error captured in hook state
     }
   }
 
@@ -297,8 +279,8 @@ export function PoolCard({ pool, wallet, userDeposit = 0, onSuccess }: Props) {
             {/* Step-by-step status */}
             <StatusIndicator status={activeStatus} />
 
-            {/* tx hash while pending */}
-            {activeTxHash && activeStatus === "pending-consensus" && (
+            {/* tx hash while processing */}
+            {activeTxHash && activeStatus === "processing" && (
               <p className="text-xs text-slate-500 font-mono break-all">
                 tx: {activeTxHash.slice(0, 24)}…
               </p>

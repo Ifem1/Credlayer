@@ -21,7 +21,8 @@ export default function ExplorePage() {
 
   useEffect(() => {
     loadPools();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+   
+  }, []);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12">
