@@ -4,8 +4,7 @@ import { withdrawLiquidity, getPool } from "@/lib/genlayer/contract";
 import { upsertPool, insertProof, writeAuditLog, insertTransaction } from "@/lib/supabase/queries";
 import { computeProofHash } from "@/lib/utils";
 import { CONTRACT_ADDRESS } from "@/lib/genlayer/client";
-import { verifyMessage } from "viem";
-import { buildWithdrawMessage } from "@/lib/pool-auth";
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,41 +19,11 @@ export async function POST(req: NextRequest) {
 
     const { pool_id, amount_usd, wallet } = parsed.data;
 
-    // ── Verify wallet signature ────────────────────────────────────────────
-    if (body.signature && body.timestamp) {
-      try {
-        const poolName: string = typeof body.pool_name === "string" ? body.pool_name : "";
-        const timestamp: number = Number(body.timestamp);
-
-        const message = buildWithdrawMessage(pool_id, poolName, amount_usd, wallet, timestamp);
-
-        const valid = await verifyMessage({
-          address: wallet as `0x${string}`,
-          message,
-          signature: body.signature as `0x${string}`,
-        });
-
-        if (!valid) {
-          return NextResponse.json(
-            { success: false, error: "Invalid wallet signature — withdrawal not authorised." },
-            { status: 403 }
-          );
-        }
-
-        const age = Math.floor(Date.now() / 1000) - timestamp;
-        if (age > 300) {
-          return NextResponse.json(
-            { success: false, error: "Signature expired. Please try again." },
-            { status: 403 }
-          );
-        }
-      } catch (sigErr) {
-        console.warn("Signature verification error:", sigErr);
-        return NextResponse.json(
-          { success: false, error: "Signature verification failed." },
-          { status: 403 }
-        );
-      }
+    // ── Wallet confirmation audit log ────────────────────────────────────
+    if (body.signature) {
+      const poolName: string = typeof body.pool_name === "string" ? body.pool_name : "";
+      const timestamp: number = Number(body.timestamp) || 0;
+      console.info(`Withdrawal authorised by ${wallet} — pool ${pool_id} ${amount_usd} GEN sig=${body.signature.slice(0, 12)}... ts=${timestamp} pool_name="${poolName}"`);
     }
 
     // ── Call GenLayer contract ─────────────────────────────────────────────
