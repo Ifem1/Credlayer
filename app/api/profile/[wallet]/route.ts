@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getBorrower, getCreditProfile, getLoansByWallet } from "@/lib/genlayer/contract";
 import { deriveGenLayerAddress } from "@/lib/genlayer/client";

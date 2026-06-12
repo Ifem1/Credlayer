@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { createProfileSchema } from "@/lib/validation";
 import { createBorrowerProfile } from "@/lib/genlayer/contract";
@@ -93,3 +95,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

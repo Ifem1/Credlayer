@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getTreasury, getProtocolFees, getAllPools } from "@/lib/genlayer/contract";
 
@@ -32,3 +34,4 @@ export async function GET() {
     return NextResponse.json({ success: false, error: "Failed to fetch treasury" }, { status: 500 });
   }
 }
+

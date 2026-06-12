@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { withdrawSchema } from "@/lib/validation";
 import { withdrawLiquidity, getPool } from "@/lib/genlayer/contract";
@@ -19,10 +21,10 @@ export async function POST(req: NextRequest) {
     const { pool_id, amount_usd: amountGEN, wallet } = parsed.data;
 
     if (body.signature) {
-      console.info(`Withdrawal authorised by ${wallet} — ${amountGEN} GEN pool ${pool_id}`);
+      console.info(`Withdrawal authorised by ${wallet} â€” ${amountGEN} GEN pool ${pool_id}`);
     }
 
-    // Convert GEN → wei; withdraw_liquidity takes amount_wei as an arg
+    // Convert GEN â†’ wei; withdraw_liquidity takes amount_wei as an arg
     const amountWei = genToWei(amountGEN);
     const receipt = await withdrawLiquidity(pool_id, amountWei, wallet as `0x${string}`);
     const txHash = receipt?.hash || "pending";
@@ -65,3 +67,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
+

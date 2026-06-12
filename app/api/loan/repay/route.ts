@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { repayLoanSchema } from "@/lib/validation";
 import { repayLoan, getLoan } from "@/lib/genlayer/contract";
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
 
     const { loan_id, amount_usd: amountGEN, wallet } = parsed.data;
 
-    // repay_loan is payable — amount is sent as transaction value (wei)
+    // repay_loan is payable â€” amount is sent as transaction value (wei)
     const amountWei = genToWei(amountGEN);
     const receipt = await repayLoan(loan_id, amountWei, wallet as `0x${string}`);
     const txHash = receipt?.hash || "pending";
@@ -84,3 +86,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to repay loan" }, { status: 500 });
   }
 }
+

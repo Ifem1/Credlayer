@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { identityVerificationSchema } from "@/lib/validation";
 import { submitIdentityVerification, getBorrower, getCreditProfile } from "@/lib/genlayer/contract";
@@ -75,3 +77,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to submit verification" }, { status: 500 });
   }
 }
+

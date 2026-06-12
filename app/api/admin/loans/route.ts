@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { isOwnerWallet } from "@/lib/genlayer/client";
 import { getLoansByStatus } from "@/lib/supabase/queries";
@@ -30,3 +32,4 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+

@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { loanRequestSchema } from "@/lib/validation";
 import { requestLoan, getLoan } from "@/lib/genlayer/contract";
@@ -121,3 +123,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminWithdrawFeesSchema } from "@/lib/validation";
 import { assertOwner } from "@/lib/admin-guard";

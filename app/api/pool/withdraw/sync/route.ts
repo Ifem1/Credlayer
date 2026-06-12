@@ -1,8 +1,10 @@
+﻿export const dynamic = "force-dynamic";
+
 /**
  * POST /api/pool/withdraw/sync
  *
  * Called by the client AFTER a successful client-side GenLayer withdraw transaction.
- * Only updates Supabase — GenLayer state was already written by the user's wallet.
+ * Only updates Supabase â€” GenLayer state was already written by the user's wallet.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withdrawSchema } from "@/lib/validation";
@@ -67,3 +69,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

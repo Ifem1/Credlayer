@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { syncSchema } from "@/lib/validation";
 import {
@@ -89,3 +91,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Sync failed" }, { status: 500 });
   }
 }
+

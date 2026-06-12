@@ -1,3 +1,5 @@
+﻿export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { depositSchema } from "@/lib/validation";
 import { depositLiquidity, getPool } from "@/lib/genlayer/contract";
@@ -20,10 +22,10 @@ export async function POST(req: NextRequest) {
 
     if (body.signature) {
       const poolName: string = typeof body.pool_name === "string" ? body.pool_name : "";
-      console.info(`Deposit authorised by ${wallet} — ${amountGEN} GEN pool ${pool_id} "${poolName}"`);
+      console.info(`Deposit authorised by ${wallet} â€” ${amountGEN} GEN pool ${pool_id} "${poolName}"`);
     }
 
-    // Convert GEN → wei for the payable call (deposit_liquidity uses gl.message.value)
+    // Convert GEN â†’ wei for the payable call (deposit_liquidity uses gl.message.value)
     const amountWei = genToWei(amountGEN);
     const receipt = await depositLiquidity(pool_id, amountWei, wallet as `0x${string}`);
     const txHash = receipt?.hash || "pending";
@@ -74,3 +76,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
+

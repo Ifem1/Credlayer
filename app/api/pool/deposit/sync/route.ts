@@ -1,8 +1,10 @@
+﻿export const dynamic = "force-dynamic";
+
 /**
  * POST /api/pool/deposit/sync
  *
  * Called by the client AFTER a successful client-side GenLayer deposit transaction.
- * Only updates Supabase — the GenLayer state was already written by the user's wallet.
+ * Only updates Supabase â€” the GenLayer state was already written by the user's wallet.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { depositSchema } from "@/lib/validation";
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
         // A background sync will pick up the accurate state.
       });
     } catch {
-      // Non-fatal — pool row may not exist yet in Supabase cache
+      // Non-fatal â€” pool row may not exist yet in Supabase cache
     }
 
     const proofHash = computeProofHash({
@@ -80,3 +82,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
