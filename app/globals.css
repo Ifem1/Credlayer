@@ -1,35 +1,135 @@
 @import "tailwindcss";
 
+/* ─── Design Tokens ─── */
 :root {
-  --background: #020617;
-  --foreground: #f1f5f9;
+  --bg:           #000000;
+  --surface:      #14213D;
+  --surface-high: #1a2a4a;
+  --primary:      #FCA311;
+  --primary-dim:  #e5930a;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E5E5E5;
+  --text-muted:   #9ca3af;
+  --success:      #00F5A0;
+  --error:        #FF4D4D;
+  --border:       rgba(255,255,255,0.08);
+  --border-hover: #FCA311;
 }
+
+/* ─── Base ─── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0f172a;
-}
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Space Grotesk', sans-serif;
 }
 
-/* Selection */
-::selection {
-  background: #3b82f620;
-  color: #93c5fd;
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: #FCA31160; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FCA311; }
+
+/* ─── Selection ─── */
+::selection { background: #FCA31130; color: #FCA311; }
+
+/* ─── Sparkle / Particle Canvas ─── */
+#sparkle-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Glow Utilities ─── */
+.glow-primary {
+  box-shadow: 0 0 20px #FCA31140, 0 0 40px #FCA31120;
+}
+.glow-primary-text {
+  text-shadow: 0 0 20px #FCA31180;
+}
+
+/* ─── Card hover border ─── */
+.card-hover {
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 20px #FCA31120;
+}
+
+/* ─── Orange gradient accent line ─── */
+.accent-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #FCA311, transparent);
+}
+
+/* ─── Glassmorphism ─── */
+.glass {
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ─── Animations ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-up { animation: fadeUp 0.6s ease forwards; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* ─── Proof Trail pill ─── */
+.proof-trail {
+  font-family: 'Manrope', monospace;
+  font-size: 12px;
+  background: rgba(252, 163, 17, 0.06);
+  border: 1px dashed rgba(252, 163, 17, 0.4);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  color: #FCA311;
+  letter-spacing: 0.04em;
+}
+
+/* ─── Status badges ─── */
+.badge-success {
+  background: rgba(0, 245, 160, 0.1);
+  border: 1px solid #00F5A0;
+  color: #00F5A0;
+}
+.badge-error {
+  background: rgba(255, 77, 77, 0.1);
+  border: 1px solid #FF4D4D;
+  color: #FF4D4D;
+}
+.badge-primary {
+  background: rgba(252, 163, 17, 0.1);
+  border: 1px solid #FCA311;
+  color: #FCA311;
+}
+
+/* ─── Chart tooltip override ─── */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #14213D !important;
+  border: 1px solid rgba(252,163,17,0.3) !important;
+  border-radius: 8px !important;
 }

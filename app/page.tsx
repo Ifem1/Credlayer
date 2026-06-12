@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   ShieldCheck,
   TrendingUp,
@@ -9,61 +8,38 @@ import {
   Lock,
   Zap,
   ArrowRight,
-  CheckCircle,
 } from "lucide-react";
 
 const FEATURES = [
   {
     icon: ShieldCheck,
-    color: "text-emerald-400",
-    bg: "bg-emerald-400/10",
     title: "AI Credit Adjudication",
-    desc: "GenLayer's AI consensus evaluates your identity, wallet history, and reputation — no collateral wall.",
+    desc: "GenLayer's AI consensus evaluates your identity, wallet history, and reputation — bypassing the traditional 150% collateral requirement through deep on-chain behavior analysis.",
   },
   {
     icon: TrendingUp,
-    color: "text-blue-400",
-    bg: "bg-blue-400/10",
     title: "Reputation-Based Lending",
-    desc: "Build on-chain credit over time. Better history unlocks lower rates and higher loan limits.",
+    desc: "Build your on-chain credit history over time. Every successful repayment unlocks lower rates and higher limits.",
   },
   {
     icon: Layers,
-    color: "text-purple-400",
-    bg: "bg-purple-400/10",
     title: "Liquidity Pools",
-    desc: "Lenders earn competitive yield by funding a diverse portfolio of AI-adjudicated loans.",
+    desc: "Yield-seekers can fund high-performing portfolios adjudicated by decentralised intelligence.",
   },
   {
     icon: Lock,
-    color: "text-yellow-400",
-    bg: "bg-yellow-400/10",
     title: "Immutable Approvals",
-    desc: "Every credit decision is hashed and stored immutably on GenLayer — provably tamper-proof.",
-  },
-  {
-    icon: Users,
-    color: "text-cyan-400",
-    bg: "bg-cyan-400/10",
-    title: "6 Loan Types",
-    desc: "Personal, Business, Creator, Freelancer, DAO Contributor, and Reputation-Backed loans.",
-  },
-  {
-    icon: Zap,
-    color: "text-orange-400",
-    bg: "bg-orange-400/10",
-    title: "Proof Trail",
-    desc: "Every action generates a verifiable on-chain proof entry tied to a GenLayer transaction hash.",
+    desc: "Every credit decision is hashed and stored immutably on GenLayer — provably tamper-proof and portable across the ecosystem.",
   },
 ];
 
 const LOAN_TYPES = [
-  "Personal Loans",
-  "Business Loans",
-  "Creator Loans",
-  "Freelancer Loans",
-  "DAO Contributor Loans",
-  "Reputation-Backed Loans",
+  { label: "Personal Loans", limit: "$50k", tag: "POPULAR" },
+  { label: "Business Loans", limit: "$500k", tag: "" },
+  { label: "Creator Loans", limit: "$75k", tag: "" },
+  { label: "Freelancer Loans", limit: "$25k", tag: "" },
+  { label: "DAO Contributor", limit: "$100k", tag: "" },
+  { label: "Reputation-Backed", limit: "$1M+", tag: "" },
 ];
 
 const STATS = [
@@ -75,32 +51,66 @@ const STATS = [
 
 export default function LandingPage() {
   return (
-    <div className="flex flex-col">
-      {/* Hero */}
-      <section className="relative overflow-hidden px-4 py-28 md:py-40">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,#3b82f620,transparent)]" />
+    <div className="flex flex-col" style={{ fontFamily: "Manrope" }}>
+
+      {/* ── Hero ── */}
+      <section className="relative overflow-hidden px-4 pt-32 pb-40 md:pt-44 md:pb-52">
+        {/* radial amber glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse 70% 50% at 50% 0%, rgba(252,163,17,0.12) 0%, transparent 70%)",
+          }}
+        />
         <div className="relative mx-auto max-w-5xl text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-sm text-blue-400">
+          {/* Eyebrow chip */}
+          <div
+            className="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full text-sm"
+            style={{
+              background: "rgba(252,163,17,0.08)",
+              border: "1px solid rgba(252,163,17,0.3)",
+              color: "#FCA311",
+              fontFamily: "Manrope",
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+            }}
+          >
             <Zap className="h-3.5 w-3.5" />
-            Powered by GenLayer AI Consensus
+            POWERED BY GENLAYER AI CONSENSUS
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold text-slate-100 leading-tight tracking-tight mb-6">
+
+          <h1
+            className="mb-6"
+            style={{
+              fontFamily: "Space Grotesk",
+              fontWeight: 700,
+              fontSize: "clamp(40px, 6vw, 72px)",
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              color: "#FFFFFF",
+            }}
+          >
             Under-Collateralized Lending<br />
-            <span className="text-blue-400">Driven by AI Credit</span>
+            <span style={{ color: "#FCA311" }}>Driven by AI Credit</span>
           </h1>
-          <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed mb-10">
+
+          <p
+            className="max-w-2xl mx-auto mb-10"
+            style={{ fontSize: 18, color: "#9ca3af", lineHeight: 1.7 }}
+          >
             CredLayer evaluates your identity, wallet behavior, and repayment history using
             GenLayer&apos;s AI consensus engine — giving creditworthy borrowers access to capital
             without locking up 150% collateral.
           </p>
+
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/apply">
-              <Button size="lg" className="gap-2">
+              <Button size="lg" className="gap-2 min-w-48">
                 Apply for a Loan <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link href="/explore">
-              <Button size="lg" variant="secondary" className="gap-2">
+              <Button size="lg" variant="secondary" className="gap-2 min-w-48">
                 <TrendingUp className="h-4 w-4" />
                 Browse Pools
               </Button>
@@ -109,81 +119,223 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="border-y border-slate-800 bg-slate-900/30">
+      {/* ── Stats Bar ── */}
+      <section
+        style={{
+          borderTop: "1px solid rgba(252,163,17,0.15)",
+          borderBottom: "1px solid rgba(252,163,17,0.15)",
+          background: "rgba(20,33,61,0.5)",
+        }}
+      >
         <div className="mx-auto max-w-5xl px-4 py-10 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {STATS.map((s) => (
             <div key={s.label}>
-              <p className="text-3xl font-bold text-blue-400">{s.value}</p>
-              <p className="text-sm text-slate-400 mt-1">{s.label}</p>
+              <p
+                style={{
+                  fontFamily: "Space Grotesk",
+                  fontWeight: 700,
+                  fontSize: 36,
+                  color: "#FCA311",
+                  lineHeight: 1,
+                }}
+              >
+                {s.value}
+              </p>
+              <p
+                style={{
+                  fontFamily: "Manrope",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: "#9ca3af",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  marginTop: 8,
+                }}
+              >
+                {s.label}
+              </p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Features */}
-      <section className="mx-auto max-w-6xl px-4 py-24">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold text-slate-100 mb-3">Protocol Features</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">
-            Built on GenLayer&apos;s equivalence principle — subjective AI decisions reach consensus across multiple validators.
+      {/* ── Features ── */}
+      <section className="mx-auto max-w-6xl px-4" style={{ paddingTop: 120, paddingBottom: 120 }}>
+        <div className="text-center mb-16">
+          <p
+            style={{
+              fontFamily: "Manrope",
+              fontWeight: 600,
+              fontSize: 12,
+              color: "#FCA311",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              marginBottom: 12,
+            }}
+          >
+            Protocol Features
+          </p>
+          <h2
+            style={{
+              fontFamily: "Space Grotesk",
+              fontWeight: 700,
+              fontSize: 40,
+              color: "#FFFFFF",
+              marginBottom: 16,
+            }}
+          >
+            Built on GenLayer&apos;s Equivalence Principle
+          </h2>
+          <p style={{ color: "#9ca3af", maxWidth: 520, margin: "0 auto", lineHeight: 1.7 }}>
+            Subjective AI decisions reach consensus across multiple validators — giving you a credit score that&apos;s provably fair.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
-              <Card key={f.title} className="hover:border-slate-700 transition-colors">
-                <CardContent className="p-6">
-                  <div className={`inline-flex rounded-lg p-2.5 mb-4 ${f.bg}`}>
-                    <Icon className={`h-5 w-5 ${f.color}`} />
-                  </div>
-                  <h3 className="text-base font-semibold text-slate-100 mb-2">{f.title}</h3>
-                  <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
-                </CardContent>
-              </Card>
+              <div
+                key={f.title}
+                className="card-hover rounded-lg p-8 transition-all duration-300"
+                style={{ background: "#14213D" }}
+              >
+                <div
+                  className="inline-flex items-center justify-center rounded-lg mb-5"
+                  style={{
+                    background: "rgba(252,163,17,0.1)",
+                    border: "1px solid rgba(252,163,17,0.3)",
+                    width: 44,
+                    height: 44,
+                  }}
+                >
+                  <Icon className="h-5 w-5" style={{ color: "#FCA311" }} />
+                </div>
+                <h3
+                  style={{
+                    fontFamily: "Space Grotesk",
+                    fontWeight: 600,
+                    fontSize: 20,
+                    color: "#FFFFFF",
+                    marginBottom: 10,
+                  }}
+                >
+                  {f.title}
+                </h3>
+                <p style={{ fontSize: 15, color: "#9ca3af", lineHeight: 1.7 }}>{f.desc}</p>
+              </div>
             );
           })}
         </div>
       </section>
 
-      {/* Loan Types */}
-      <section className="bg-slate-900/30 border-y border-slate-800 py-20 px-4">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-bold text-slate-100 mb-4">Loan Types Available</h2>
-          <p className="text-slate-400 mb-12 max-w-xl mx-auto">
-            Six specialized loan products, each with AI-calibrated risk parameters.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* ── Loan Types ── */}
+      <section
+        style={{
+          borderTop: "1px solid rgba(252,163,17,0.1)",
+          borderBottom: "1px solid rgba(252,163,17,0.1)",
+          background: "rgba(20,33,61,0.3)",
+          paddingTop: 100,
+          paddingBottom: 100,
+        }}
+      >
+        <div className="mx-auto max-w-5xl px-4">
+          <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
+            <div>
+              <p
+                style={{
+                  fontFamily: "Manrope",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  color: "#FCA311",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                }}
+              >
+                Loan Types Available
+              </p>
+              <h2
+                style={{
+                  fontFamily: "Space Grotesk",
+                  fontWeight: 700,
+                  fontSize: 36,
+                  color: "#FFFFFF",
+                }}
+              >
+                Six specialized loan products
+              </h2>
+            </div>
+            <Link
+              href="/explore"
+              style={{ fontSize: 13, color: "#FCA311", fontWeight: 600, letterSpacing: "0.06em" }}
+            >
+              VIEW ALL PARAMETERS →
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {LOAN_TYPES.map((lt) => (
               <div
-                key={lt}
-                className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300"
+                key={lt.label}
+                className="card-hover rounded-lg p-6"
+                style={{ background: "#14213D" }}
               >
-                <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                {lt}
+                <div className="flex items-start justify-between mb-3">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(252,163,17,0.1)", border: "1px solid rgba(252,163,17,0.3)" }}
+                  >
+                    <Users className="h-4 w-4" style={{ color: "#FCA311" }} />
+                  </div>
+                  {lt.tag && (
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: "rgba(252,163,17,0.15)", color: "#FCA311", fontFamily: "Manrope", fontWeight: 700, letterSpacing: "0.06em" }}
+                    >
+                      {lt.tag}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontFamily: "Space Grotesk", fontWeight: 600, fontSize: 16, color: "#FFFFFF", marginBottom: 6 }}>
+                  {lt.label}
+                </p>
+                <p style={{ fontFamily: "Manrope", fontWeight: 700, fontSize: 22, color: "#FCA311" }}>
+                  {lt.limit}
+                </p>
+                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  Limits up to
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="mx-auto max-w-4xl px-4 py-24 text-center">
-        <h2 className="text-3xl font-bold text-slate-100 mb-4">
+      {/* ── CTA ── */}
+      <section className="mx-auto max-w-4xl px-4 text-center" style={{ paddingTop: 120, paddingBottom: 120 }}>
+        <h2
+          style={{
+            fontFamily: "Space Grotesk",
+            fontWeight: 700,
+            fontSize: 44,
+            color: "#FFFFFF",
+            marginBottom: 16,
+          }}
+        >
           Ready to Build Your Credit?
         </h2>
-        <p className="text-slate-400 mb-10 max-w-xl mx-auto">
-          Connect your wallet, complete identity verification, and let GenLayer&apos;s AI determine your credit profile.
+        <p style={{ color: "#9ca3af", marginBottom: 40, maxWidth: 480, margin: "0 auto 40px", lineHeight: 1.7 }}>
+          Connect your wallet, complete identity verification, and let GenLayer&apos;s AI determine your credit profile in minutes.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link href="/apply">
-            <Button size="lg" className="gap-2 min-w-48">
+            <Button size="lg" className="gap-2 min-w-52">
               Get Started <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
           <Link href="/dashboard/lender">
-            <Button size="lg" variant="secondary" className="min-w-48">
+            <Button size="lg" variant="secondary" className="min-w-52">
               Become a Lender
             </Button>
           </Link>

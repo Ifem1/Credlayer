@@ -3,22 +3,29 @@ import { cn } from "@/lib/utils";
 import React from "react";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center text-sm font-semibold transition-all duration-200 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-blue-600 text-white hover:bg-blue-700 shadow",
-        secondary: "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700",
-        destructive: "bg-red-600 text-white hover:bg-red-700",
-        outline: "border border-slate-600 text-slate-200 hover:bg-slate-800",
-        ghost: "text-slate-200 hover:bg-slate-800",
-        link: "text-blue-400 underline-offset-4 hover:underline",
-        success: "bg-emerald-600 text-white hover:bg-emerald-700",
+        default:
+          "rounded-md text-black hover:scale-[1.02]",
+        secondary:
+          "rounded-md border text-white hover:scale-[1.02]",
+        destructive:
+          "rounded-md text-white",
+        outline:
+          "rounded-md border text-white hover:scale-[1.02]",
+        ghost:
+          "rounded-md text-white hover:bg-white/5",
+        link:
+          "underline-offset-4 hover:underline",
+        success:
+          "rounded-md text-black",
       },
       size: {
-        default: "h-10 px-4 py-2",
+        default: "h-10 px-5 py-2",
         sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-12 rounded-lg px-8 text-base",
+        lg: "h-12 px-8 text-base",
         icon: "h-9 w-9",
       },
     },
@@ -32,9 +39,25 @@ interface ButtonProps
   loading?: boolean;
 }
 
-export function Button({ className, variant, size, loading, children, ...props }: ButtonProps) {
+const VARIANT_STYLES: Record<string, React.CSSProperties> = {
+  default:     { background: "#FCA311", color: "#000", fontFamily: "Space Grotesk", fontWeight: 700 },
+  secondary:   { background: "transparent", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontFamily: "Manrope" },
+  destructive: { background: "#FF4D4D", color: "#fff" },
+  outline:     { background: "transparent", border: "1px solid rgba(252,163,17,0.5)", color: "#FCA311", fontFamily: "Manrope" },
+  ghost:       { background: "transparent", color: "#fff" },
+  link:        { background: "transparent", color: "#FCA311" },
+  success:     { background: "#00F5A0", color: "#000", fontFamily: "Space Grotesk", fontWeight: 700 },
+};
+
+export function Button({ className, variant = "default", size, loading, children, style, ...props }: ButtonProps) {
+  const variantStyle = VARIANT_STYLES[variant ?? "default"] ?? VARIANT_STYLES.default;
   return (
-    <button className={cn(buttonVariants({ variant, size }), className)} disabled={loading || props.disabled} {...props}>
+    <button
+      className={cn(buttonVariants({ variant, size }), className)}
+      style={{ ...variantStyle, ...style }}
+      disabled={loading || props.disabled}
+      {...props}
+    >
       {loading ? (
         <span className="flex items-center gap-2">
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">

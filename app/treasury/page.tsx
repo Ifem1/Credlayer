@@ -22,27 +22,63 @@ export default function TreasuryPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
+      <div className="flex justify-center py-32">
+        <div
+          className="h-10 w-10 rounded-full border-2 animate-spin"
+          style={{ borderColor: "rgba(252,163,17,0.2)", borderTopColor: "#FCA311" }}
+        />
       </div>
     );
   }
 
   if (!treasury || !fees) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-20 text-center text-slate-500">
+      <div className="mx-auto max-w-xl px-4 py-24 text-center" style={{ color: "#9ca3af" }}>
         Unable to load treasury data. Ensure GenLayer is running.
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-100 mb-1">Protocol Treasury</h1>
-        <p className="text-slate-400">Real-time treasury metrics from GenLayer (source of truth).</p>
+    <div style={{ fontFamily: "Manrope" }}>
+      {/* Hero */}
+      <section
+        className="relative px-4 pt-20 pb-16"
+        style={{
+          background: "linear-gradient(180deg, rgba(20,33,61,0.5) 0%, transparent 100%)",
+          borderBottom: "1px solid rgba(252,163,17,0.1)",
+        }}
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(252,163,17,0.06) 0%, transparent 70%)" }}
+        />
+        <div className="relative mx-auto max-w-5xl">
+          <div
+            className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-full text-xs"
+            style={{ background: "rgba(252,163,17,0.08)", border: "1px solid rgba(252,163,17,0.25)", color: "#FCA311", fontWeight: 600, letterSpacing: "0.08em" }}
+          >
+            ⬡ REAL-TIME RESERVES
+          </div>
+          <h1
+            style={{
+              fontFamily: "Space Grotesk", fontWeight: 700,
+              fontSize: "clamp(36px,5vw,56px)", color: "#FFFFFF", lineHeight: 1.1, marginBottom: 12,
+            }}
+          >
+            Protocol{" "}
+            <span style={{ color: "#FCA311" }}>Treasury</span>
+          </h1>
+          <p style={{ color: "#9ca3af", fontSize: 16, maxWidth: 500, lineHeight: 1.7 }}>
+            Institutional-grade asset management and liquidity reserves secured by decentralized AI protocols.
+          </p>
+        </div>
+      </section>
+
+      {/* Content */}
+      <div className="mx-auto max-w-5xl px-4 py-14">
+        <TreasuryPanel treasury={treasury} fees={fees} />
       </div>
-      <TreasuryPanel treasury={treasury} fees={fees} />
     </div>
   );
 }
