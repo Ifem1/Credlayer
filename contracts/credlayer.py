@@ -1,8 +1,16 @@
-# v0.2.17
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.2.18
 
 from genlayer import *
 import json
+
+
+@gl.evm.contract_interface
+class _NativeRecipient:
+    class View:
+        pass
+
+    class Write:
+        pass
 
 
 class CredLayer(gl.Contract):
@@ -34,19 +42,21 @@ class CredLayer(gl.Contract):
         self.liquidity_pools = TreeMap()
 
         self.treasury = json.dumps({
-            "total_deposited": 0,
-            "total_borrowed": 0,
-            "total_repaid": 0,
-            "total_defaults": 0,
+            "total_deposited_wei": 0,
+            "total_borrowed_wei": 0,
+            "total_repaid_wei": 0,
+            "total_defaults_wei": 0,
+            "unallocated_received_wei": 0,
             "reserve_ratio": 20,
             "last_updated": "0",
         })
 
         self.protocol_fees = json.dumps({
-            "total_collected": 0,
+            "total_collected_wei": 0,
             "origination_fee_bps": 100,
             "late_fee_bps": 200,
             "default_penalty_bps": 500,
+            "last_withdrawn": "0",
         })
 
         self.loan_counter = u256(0)
@@ -60,12 +70,29 @@ class CredLayer(gl.Contract):
         return str(gl.message.sender_address)
 
     def _now(self) -> str:
-        return "0"
+        try:
+            return str(gl.message.datetime)
+        except Exception:
+            return "0"
 
     def _loads(self, raw: str, fallback):
         if raw is None or raw == "":
             return fallback
         return json.loads(raw)
+
+    def _require_owner(self) -> None:
+        if self._caller() != self.owner:
+            raise gl.vm.UserError("Only owner can perform this action")
+
+    def _require_positive(self, amount: u256, label: str) -> None:
+        if amount == u256(0):
+            raise gl.vm.UserError(label + " must be greater than zero")
+
+    def _send_gen(self, recipient: str, amount: u256) -> None:
+        if amount == u256(0):
+            return
+
+        _NativeRecipient(Address(recipient)).emit_transfer(value=amount)
 
     def _get_borrower(self, wallet: str) -> dict:
         return self._loads(self.borrowers.get(wallet), {})
@@ -126,10 +153,6 @@ class CredLayer(gl.Contract):
 
         return json.loads(cleaned)
 
-    def _require_owner(self) -> None:
-        if self._caller() != self.owner:
-            raise Exception("Only owner can perform this action")
-
     # ---------------------------------------------------------------------
     # Borrower profile
     # ---------------------------------------------------------------------
@@ -147,7 +170,7 @@ class CredLayer(gl.Contract):
         sender = self._caller()
 
         if self.borrowers.get(sender) is not None:
-            raise Exception("Profile already exists")
+            raise gl.vm.UserError("Profile already exists")
 
         profile = {
             "wallet": sender,
@@ -177,8 +200,8 @@ class CredLayer(gl.Contract):
             "wallet_trust_score": 0,
             "income_score": 0,
             "governance_score": 0,
-            "total_borrowed": 0,
-            "total_repaid": 0,
+            "total_borrowed_wei": 0,
+            "total_repaid_wei": 0,
             "active_loan_count": 0,
             "fraud_risk": "UNKNOWN",
             "last_evaluated": "",
@@ -202,7 +225,7 @@ class CredLayer(gl.Contract):
         profile = self._get_borrower(sender)
 
         if profile == {}:
-            raise Exception("Profile not found")
+            raise gl.vm.UserError("Profile not found")
 
         profile["full_name"] = full_name
         profile["occupation"] = occupation
@@ -224,7 +247,7 @@ class CredLayer(gl.Contract):
         profile = self._get_borrower(sender)
 
         if profile == {}:
-            raise Exception("Profile not found")
+            raise gl.vm.UserError("Profile not found")
 
         profile["kyc_status"] = "UNDER_REVIEW"
         profile["identity_documents"] = {
@@ -235,6 +258,7 @@ class CredLayer(gl.Contract):
             "submitted_at": self._now(),
         }
         profile["updated_at"] = self._now()
+
         self._save_borrower(sender, profile)
 
         result = yield gl.eq_principle.prompt_non_comparative(
@@ -274,17 +298,172 @@ Return ONLY valid JSON:
         self._save_credit_profile(sender, cp)
 
     # ---------------------------------------------------------------------
-    # Loans
+    # Liquidity pools — real GEN deposits and withdrawals
+    # ---------------------------------------------------------------------
+
+    @gl.public.write
+    def create_pool(
+        self,
+        name: str,
+        target_return_bps: u256,
+        min_credit_score: u256,
+        max_loan_amount_wei: u256,
+        risk_tier: str,
+    ) -> str:
+        self._require_owner()
+
+        if risk_tier not in ["LOW", "MEDIUM", "HIGH"]:
+            raise gl.vm.UserError("Invalid risk tier")
+
+        self.pool_counter = u256(int(self.pool_counter) + 1)
+        pool_id = "pool_" + str(int(self.pool_counter))
+
+        pool = {
+            "pool_id": pool_id,
+            "name": name,
+            "target_return_bps": int(target_return_bps),
+            "min_credit_score": int(min_credit_score),
+            "max_loan_amount_wei": int(max_loan_amount_wei),
+            "risk_tier": risk_tier,
+            "status": "ACTIVE",
+            "total_deposited_wei": 0,
+            "available_liquidity_wei": 0,
+            "total_borrowed_wei": 0,
+            "total_repaid_wei": 0,
+            "active_loans": 0,
+            "depositors": {},
+            "created_at": self._now(),
+        }
+
+        self._save_pool(pool_id, pool)
+
+        return pool_id
+
+    @gl.public.write.payable
+    def deposit_liquidity(self, pool_id: str) -> None:
+        sender = self._caller()
+        amount = gl.message.value
+
+        self._require_positive(amount, "Deposit amount")
+
+        pool = self._get_pool(pool_id)
+
+        if pool == {}:
+            raise gl.vm.UserError("Pool not found")
+
+        if pool.get("status") != "ACTIVE":
+            raise gl.vm.UserError("Pool not active")
+
+        pool["total_deposited_wei"] = int(pool.get("total_deposited_wei", 0)) + int(amount)
+        pool["available_liquidity_wei"] = int(pool.get("available_liquidity_wei", 0)) + int(amount)
+
+        depositors = pool.get("depositors", {})
+        depositors[sender] = int(depositors.get(sender, 0)) + int(amount)
+        pool["depositors"] = depositors
+
+        self._save_pool(pool_id, pool)
+
+        lender = self._get_lender(sender)
+
+        if lender == {}:
+            lender = {
+                "wallet": sender,
+                "total_deposited_wei": 0,
+                "total_earned_wei": 0,
+                "active_pools": [],
+                "joined_at": self._now(),
+            }
+
+        lender["total_deposited_wei"] = int(lender.get("total_deposited_wei", 0)) + int(amount)
+
+        active_pools = lender.get("active_pools", [])
+
+        if pool_id not in active_pools:
+            active_pools.append(pool_id)
+
+        lender["active_pools"] = active_pools
+
+        self._save_lender(sender, lender)
+
+        treasury = self._get_treasury()
+        treasury["total_deposited_wei"] = int(treasury.get("total_deposited_wei", 0)) + int(amount)
+        self._save_treasury(treasury)
+
+    @gl.public.write
+    def withdraw_liquidity(self, pool_id: str, amount_wei: u256) -> None:
+        sender = self._caller()
+
+        self._require_positive(amount_wei, "Withdrawal amount")
+
+        pool = self._get_pool(pool_id)
+
+        if pool == {}:
+            raise gl.vm.UserError("Pool not found")
+
+        depositors = pool.get("depositors", {})
+
+        if sender not in depositors:
+            raise gl.vm.UserError("No deposit found")
+
+        amount = int(amount_wei)
+
+        if int(depositors.get(sender, 0)) < amount:
+            raise gl.vm.UserError("Insufficient deposit balance")
+
+        if int(pool.get("available_liquidity_wei", 0)) < amount:
+            raise gl.vm.UserError("Insufficient available liquidity")
+
+        if int(self.balance) < amount:
+            raise gl.vm.UserError("Contract GEN balance is insufficient")
+
+        depositors[sender] = int(depositors.get(sender, 0)) - amount
+        pool["depositors"] = depositors
+        pool["available_liquidity_wei"] = int(pool.get("available_liquidity_wei", 0)) - amount
+        pool["total_deposited_wei"] = max(0, int(pool.get("total_deposited_wei", 0)) - amount)
+
+        self._save_pool(pool_id, pool)
+
+        lender = self._get_lender(sender)
+
+        if lender != {}:
+            lender["total_deposited_wei"] = max(0, int(lender.get("total_deposited_wei", 0)) - amount)
+            self._save_lender(sender, lender)
+
+        treasury = self._get_treasury()
+        treasury["total_deposited_wei"] = max(0, int(treasury.get("total_deposited_wei", 0)) - amount)
+        self._save_treasury(treasury)
+
+        self._send_gen(sender, amount_wei)
+
+    @gl.public.write
+    def close_pool(self, pool_id: str) -> None:
+        self._require_owner()
+
+        pool = self._get_pool(pool_id)
+
+        if pool == {}:
+            raise gl.vm.UserError("Pool not found")
+
+        if int(pool.get("active_loans", 0)) > 0:
+            raise gl.vm.UserError("Pool has active loans")
+
+        pool["status"] = "CLOSED"
+        pool["closed_at"] = self._now()
+
+        self._save_pool(pool_id, pool)
+
+    # ---------------------------------------------------------------------
+    # Loans — real GEN disbursement and repayment
     # ---------------------------------------------------------------------
 
     @gl.public.write
     def request_loan(
         self,
-        amount_usd: u256,
+        amount_wei: u256,
         duration_days: u256,
         loan_type: str,
         purpose: str,
-        collateral_amount: u256,
+        collateral_amount_wei: u256,
         wallet_age_days: u256,
         total_transactions: u256,
         avg_balance_usd: u256,
@@ -293,13 +472,16 @@ Return ONLY valid JSON:
         income_documents_hash: str,
     ) -> str:
         sender = self._caller()
+
+        self._require_positive(amount_wei, "Loan amount")
+
         borrower = self._get_borrower(sender)
 
         if borrower == {}:
-            raise Exception("Borrower profile not found")
+            raise gl.vm.UserError("Borrower profile not found")
 
         if borrower.get("kyc_status") != "VERIFIED":
-            raise Exception("KYC verification required")
+            raise gl.vm.UserError("KYC verification required")
 
         valid_types = [
             "PERSONAL",
@@ -311,7 +493,7 @@ Return ONLY valid JSON:
         ]
 
         if loan_type not in valid_types:
-            raise Exception("Invalid loan type")
+            raise gl.vm.UserError("Invalid loan type")
 
         repayment_hist = self._get_history(sender)
         completed = 0
@@ -327,7 +509,7 @@ Return ONLY valid JSON:
 
         assessment = yield from self._evaluate_creditworthiness(
             sender,
-            amount_usd,
+            amount_wei,
             duration_days,
             loan_type,
             purpose,
@@ -357,23 +539,26 @@ Return ONLY valid JSON:
         )
 
         status = "REJECTED"
+
         if assessment.get("decision") == "APPROVE":
-            status = "PENDING_APPROVAL"
+            status = "PENDING_BORROWER_ACCEPTANCE"
+
+        interest_rate_bps = int(assessment.get("interest_rate_bps", 1500))
 
         loan = {
             "loan_id": loan_id,
             "borrower": sender,
-            "amount_usd": int(amount_usd),
+            "amount_wei": int(amount_wei),
             "duration_days": int(duration_days),
             "loan_type": loan_type,
             "purpose": purpose,
-            "collateral_amount": int(collateral_amount),
+            "collateral_amount_wei": int(collateral_amount_wei),
             "status": status,
             "credit_score": int(assessment.get("credit_score", 500)),
             "risk_level": assessment.get("risk_level", "HIGH"),
-            "interest_rate": int(assessment.get("interest_rate", 15)),
-            "required_collateral_ratio": int(assessment.get("required_collateral_ratio", 70)),
-            "max_loan_amount": int(assessment.get("max_loan_amount", 0)),
+            "interest_rate_bps": interest_rate_bps,
+            "required_collateral_ratio_bps": int(assessment.get("required_collateral_ratio_bps", 7000)),
+            "max_loan_amount_wei": int(assessment.get("max_loan_amount_wei", int(amount_wei))),
             "confidence": assessment.get("confidence", 0),
             "reasoning": assessment.get("reasoning", ""),
             "positive_factors": assessment.get("positive_factors", []),
@@ -382,10 +567,11 @@ Return ONLY valid JSON:
             "approval_timestamp": self._now(),
             "consensus_id": "consensus_" + loan_id,
             "requested_at": self._now(),
+            "accepted_at": "",
             "activated_at": "",
             "due_date": "",
             "repaid_at": "",
-            "total_repaid": 0,
+            "total_repaid_wei": 0,
             "is_immutable": assessment.get("decision") == "APPROVE",
         }
 
@@ -409,7 +595,7 @@ Return ONLY valid JSON:
         )
         cp["income_score"] = self._calculate_income_score(
             u256(int(borrower.get("monthly_income_usd", 0))),
-            amount_usd,
+            amount_wei,
             avg_balance_usd,
         )
         cp["governance_score"] = self._calculate_governance_score(
@@ -428,13 +614,13 @@ Return ONLY valid JSON:
         loan = self._get_loan(loan_id)
 
         if loan == {}:
-            raise Exception("Loan not found")
+            raise gl.vm.UserError("Loan not found")
 
         if loan.get("borrower") != sender:
-            raise Exception("Not authorized")
+            raise gl.vm.UserError("Not authorized")
 
-        if loan.get("status") != "PENDING_APPROVAL":
-            raise Exception("Loan not in pending approval state")
+        if loan.get("status") != "PENDING_BORROWER_ACCEPTANCE":
+            raise gl.vm.UserError("Loan not awaiting borrower acceptance")
 
         loan["status"] = "APPROVED"
         loan["accepted_at"] = self._now()
@@ -447,13 +633,13 @@ Return ONLY valid JSON:
         loan = self._get_loan(loan_id)
 
         if loan == {}:
-            raise Exception("Loan not found")
+            raise gl.vm.UserError("Loan not found")
 
         if loan.get("borrower") != sender:
-            raise Exception("Not authorized")
+            raise gl.vm.UserError("Not authorized")
 
-        if loan.get("status") not in ["PENDING_APPROVAL", "APPROVED"]:
-            raise Exception("Cannot cancel loan in current state")
+        if loan.get("status") not in ["PENDING_BORROWER_ACCEPTANCE", "APPROVED"]:
+            raise gl.vm.UserError("Cannot cancel loan in current state")
 
         loan["status"] = "CANCELLED"
         loan["cancelled_at"] = self._now()
@@ -465,24 +651,38 @@ Return ONLY valid JSON:
         loan = self._get_loan(loan_id)
 
         if loan == {}:
-            raise Exception("Loan not found")
+            raise gl.vm.UserError("Loan not found")
 
         if loan.get("status") != "APPROVED":
-            raise Exception("Loan must be approved before activation")
+            raise gl.vm.UserError("Loan must be approved before activation")
 
         pool = self._get_pool(pool_id)
 
         if pool == {}:
-            raise Exception("Pool not found")
+            raise gl.vm.UserError("Pool not found")
 
         if pool.get("status") != "ACTIVE":
-            raise Exception("Pool not active")
+            raise gl.vm.UserError("Pool not active")
 
-        if int(pool.get("available_liquidity", 0)) < int(loan.get("amount_usd", 0)):
-            raise Exception("Insufficient pool liquidity")
+        amount = int(loan.get("amount_wei", 0))
 
-        pool["available_liquidity"] = int(pool.get("available_liquidity", 0)) - int(loan["amount_usd"])
-        pool["total_borrowed"] = int(pool.get("total_borrowed", 0)) + int(loan["amount_usd"])
+        if amount <= 0:
+            raise gl.vm.UserError("Invalid loan amount")
+
+        if int(pool.get("available_liquidity_wei", 0)) < amount:
+            raise gl.vm.UserError("Insufficient pool liquidity")
+
+        if int(pool.get("max_loan_amount_wei", 0)) > 0 and amount > int(pool.get("max_loan_amount_wei", 0)):
+            raise gl.vm.UserError("Loan amount exceeds pool maximum")
+
+        if int(loan.get("credit_score", 0)) < int(pool.get("min_credit_score", 0)):
+            raise gl.vm.UserError("Borrower credit score below pool minimum")
+
+        if int(self.balance) < amount:
+            raise gl.vm.UserError("Contract GEN balance is insufficient")
+
+        pool["available_liquidity_wei"] = int(pool.get("available_liquidity_wei", 0)) - amount
+        pool["total_borrowed_wei"] = int(pool.get("total_borrowed_wei", 0)) + amount
         pool["active_loans"] = int(pool.get("active_loans", 0)) + 1
 
         self._save_pool(pool_id, pool)
@@ -498,49 +698,77 @@ Return ONLY valid JSON:
         borrower["active_loans"] = int(borrower.get("active_loans", 0)) + 1
         self._save_borrower(loan["borrower"], borrower)
 
+        cp = self._get_credit_profile(loan["borrower"])
+        cp["total_borrowed_wei"] = int(cp.get("total_borrowed_wei", 0)) + amount
+        cp["active_loan_count"] = int(cp.get("active_loan_count", 0)) + 1
+        self._save_credit_profile(loan["borrower"], cp)
+
         treasury = self._get_treasury()
-        treasury["total_borrowed"] = int(treasury.get("total_borrowed", 0)) + int(loan["amount_usd"])
+        treasury["total_borrowed_wei"] = int(treasury.get("total_borrowed_wei", 0)) + amount
         self._save_treasury(treasury)
 
-    @gl.public.write
-    def repay_loan(self, loan_id: str, amount_usd: u256) -> None:
+        self._send_gen(loan["borrower"], u256(amount))
+
+    @gl.public.write.payable
+    def repay_loan(self, loan_id: str) -> None:
         sender = self._caller()
+        paid = gl.message.value
+
+        self._require_positive(paid, "Repayment amount")
+
         loan = self._get_loan(loan_id)
 
         if loan == {}:
-            raise Exception("Loan not found")
+            raise gl.vm.UserError("Loan not found")
 
         if loan.get("borrower") != sender:
-            raise Exception("Not authorized")
+            raise gl.vm.UserError("Not authorized")
 
         if loan.get("status") != "ACTIVE":
-            raise Exception("Loan not active")
+            raise gl.vm.UserError("Loan not active")
+
+        principal = int(loan["amount_wei"])
+        rate_bps = int(loan.get("interest_rate_bps", 1500))
+        days = int(loan.get("duration_days", 30))
+
+        interest = (principal * rate_bps * days) // (10000 * 365)
+        total_owed = principal + interest
+
+        already_repaid = int(loan.get("total_repaid_wei", 0))
+        remaining = max(0, total_owed - already_repaid)
+
+        paid_int = int(paid)
+
+        if paid_int > remaining:
+            accepted_payment = remaining
+            refund = paid_int - remaining
+        else:
+            accepted_payment = paid_int
+            refund = 0
+
+        if accepted_payment <= 0:
+            raise gl.vm.UserError("Loan already fully repaid")
 
         fees = self._get_protocol_fees()
 
         fee_bps = int(fees.get("origination_fee_bps", 100))
-        fee_amount = (int(amount_usd) * fee_bps) // 10000
-        net_amount = int(amount_usd) - fee_amount
+        fee_amount = (accepted_payment * fee_bps) // 10000
+        net_amount = accepted_payment - fee_amount
 
-        loan["total_repaid"] = int(loan.get("total_repaid", 0)) + net_amount
-
-        principal = int(loan["amount_usd"])
-        rate = int(loan.get("interest_rate", 15))
-        days = int(loan.get("duration_days", 30))
-
-        interest = (principal * rate * days) // (100 * 365)
-        total_owed = principal + interest
+        loan["total_repaid_wei"] = int(loan.get("total_repaid_wei", 0)) + net_amount
 
         status = "PARTIAL"
 
-        if int(loan["total_repaid"]) >= total_owed:
+        if int(loan["total_repaid_wei"]) >= total_owed:
             status = "COMPLETED"
 
         repayment_record = {
             "loan_id": loan_id,
-            "amount": int(amount_usd),
-            "fee": fee_amount,
-            "net_amount": net_amount,
+            "amount_paid_wei": paid_int,
+            "accepted_payment_wei": accepted_payment,
+            "refund_wei": refund,
+            "fee_wei": fee_amount,
+            "net_amount_wei": net_amount,
             "status": status,
             "repaid_at": self._now(),
         }
@@ -549,36 +777,47 @@ Return ONLY valid JSON:
         history.append(repayment_record)
         self._save_history(sender, history)
 
-        fees["total_collected"] = int(fees.get("total_collected", 0)) + fee_amount
+        fees["total_collected_wei"] = int(fees.get("total_collected_wei", 0)) + fee_amount
         self._save_protocol_fees(fees)
+
+        pool_id = loan.get("pool_id", "")
+
+        if pool_id != "":
+            pool = self._get_pool(pool_id)
+
+            if pool != {}:
+                pool["available_liquidity_wei"] = int(pool.get("available_liquidity_wei", 0)) + net_amount
+                pool["total_repaid_wei"] = int(pool.get("total_repaid_wei", 0)) + net_amount
+
+                if status == "COMPLETED":
+                    pool["active_loans"] = max(0, int(pool.get("active_loans", 0)) - 1)
+
+                self._save_pool(pool_id, pool)
+
+        treasury = self._get_treasury()
+        treasury["total_repaid_wei"] = int(treasury.get("total_repaid_wei", 0)) + net_amount
+        self._save_treasury(treasury)
 
         if status == "COMPLETED":
             loan["status"] = "REPAID"
             loan["repaid_at"] = self._now()
-
-            pool_id = loan.get("pool_id", "")
-
-            if pool_id != "":
-                pool = self._get_pool(pool_id)
-
-                if pool != {}:
-                    pool["available_liquidity"] = int(pool.get("available_liquidity", 0)) + int(loan["total_repaid"])
-                    pool["total_repaid"] = int(pool.get("total_repaid", 0)) + int(loan["total_repaid"])
-                    pool["active_loans"] = max(0, int(pool.get("active_loans", 0)) - 1)
-                    self._save_pool(pool_id, pool)
 
             borrower = self._get_borrower(sender)
             borrower["active_loans"] = max(0, int(borrower.get("active_loans", 0)) - 1)
             borrower["completed_loans"] = int(borrower.get("completed_loans", 0)) + 1
             self._save_borrower(sender, borrower)
 
-            treasury = self._get_treasury()
-            treasury["total_repaid"] = int(treasury.get("total_repaid", 0)) + int(loan["total_repaid"])
-            self._save_treasury(treasury)
+            cp = self._get_credit_profile(sender)
+            cp["total_repaid_wei"] = int(cp.get("total_repaid_wei", 0)) + int(loan["total_repaid_wei"])
+            cp["active_loan_count"] = max(0, int(cp.get("active_loan_count", 0)) - 1)
+            self._save_credit_profile(sender, cp)
 
             self._update_reputation(sender, "REPAID")
 
         self._save_loan(loan_id, loan)
+
+        if refund > 0:
+            self._send_gen(sender, u256(refund))
 
     @gl.public.write
     def mark_default(self, loan_id: str) -> None:
@@ -587,15 +826,24 @@ Return ONLY valid JSON:
         loan = self._get_loan(loan_id)
 
         if loan == {}:
-            raise Exception("Loan not found")
+            raise gl.vm.UserError("Loan not found")
 
         if loan.get("status") != "ACTIVE":
-            raise Exception("Loan not active")
+            raise gl.vm.UserError("Loan not active")
 
         loan["status"] = "DEFAULTED"
         loan["defaulted_at"] = self._now()
 
         self._save_loan(loan_id, loan)
+
+        pool_id = loan.get("pool_id", "")
+
+        if pool_id != "":
+            pool = self._get_pool(pool_id)
+
+            if pool != {}:
+                pool["active_loans"] = max(0, int(pool.get("active_loans", 0)) - 1)
+                self._save_pool(pool_id, pool)
 
         borrower_addr = loan["borrower"]
         borrower = self._get_borrower(borrower_addr)
@@ -606,170 +854,38 @@ Return ONLY valid JSON:
         self._save_borrower(borrower_addr, borrower)
 
         treasury = self._get_treasury()
-        treasury["total_defaults"] = int(treasury.get("total_defaults", 0)) + int(loan["amount_usd"])
+        treasury["total_defaults_wei"] = int(treasury.get("total_defaults_wei", 0)) + int(loan["amount_wei"])
         self._save_treasury(treasury)
+
+        cp = self._get_credit_profile(borrower_addr)
+        cp["active_loan_count"] = max(0, int(cp.get("active_loan_count", 0)) - 1)
+        self._save_credit_profile(borrower_addr, cp)
 
         self._update_reputation(borrower_addr, "DEFAULTED")
 
-    # ---------------------------------------------------------------------
-    # Liquidity pools
-    # ---------------------------------------------------------------------
-
     @gl.public.write
-    def create_pool(
-        self,
-        name: str,
-        target_return_bps: u256,
-        min_credit_score: u256,
-        max_loan_amount: u256,
-        risk_tier: str,
-    ) -> str:
+    def withdraw_protocol_fees(self, amount_wei: u256, recipient: str) -> None:
         self._require_owner()
+        self._require_positive(amount_wei, "Fee withdrawal amount")
 
-        if risk_tier not in ["LOW", "MEDIUM", "HIGH"]:
-            raise Exception("Invalid risk tier")
-
-        self.pool_counter = u256(int(self.pool_counter) + 1)
-        pool_id = "pool_" + str(int(self.pool_counter))
-
-        pool = {
-            "pool_id": pool_id,
-            "name": name,
-            "target_return_bps": int(target_return_bps),
-            "min_credit_score": int(min_credit_score),
-            "max_loan_amount": int(max_loan_amount),
-            "risk_tier": risk_tier,
-            "status": "ACTIVE",
-            "total_deposited": 0,
-            "available_liquidity": 0,
-            "total_borrowed": 0,
-            "total_repaid": 0,
-            "active_loans": 0,
-            "depositors": {},
-            "created_at": self._now(),
-        }
-
-        self._save_pool(pool_id, pool)
-
-        return pool_id
-
-    @gl.public.write
-    def deposit_liquidity(self, pool_id: str, amount_usd: u256) -> None:
-        sender = self._caller()
-        pool = self._get_pool(pool_id)
-
-        if pool == {}:
-            raise Exception("Pool not found")
-
-        if pool.get("status") != "ACTIVE":
-            raise Exception("Pool not active")
-
-        amount = int(amount_usd)
-
-        pool["total_deposited"] = int(pool.get("total_deposited", 0)) + amount
-        pool["available_liquidity"] = int(pool.get("available_liquidity", 0)) + amount
-
-        depositors = pool.get("depositors", {})
-        depositors[sender] = int(depositors.get(sender, 0)) + amount
-        pool["depositors"] = depositors
-
-        self._save_pool(pool_id, pool)
-
-        treasury = self._get_treasury()
-        treasury["total_deposited"] = int(treasury.get("total_deposited", 0)) + amount
-        self._save_treasury(treasury)
-
-        lender = self._get_lender(sender)
-
-        if lender == {}:
-            lender = {
-                "wallet": sender,
-                "total_deposited": 0,
-                "total_earned": 0,
-                "active_pools": [],
-                "joined_at": self._now(),
-            }
-
-        lender["total_deposited"] = int(lender.get("total_deposited", 0)) + amount
-
-        active_pools = lender.get("active_pools", [])
-
-        if pool_id not in active_pools:
-            active_pools.append(pool_id)
-
-        lender["active_pools"] = active_pools
-
-        self._save_lender(sender, lender)
-
-    @gl.public.write
-    def withdraw_liquidity(self, pool_id: str, amount_usd: u256) -> None:
-        sender = self._caller()
-        pool = self._get_pool(pool_id)
-
-        if pool == {}:
-            raise Exception("Pool not found")
-
-        amount = int(amount_usd)
-
-        depositors = pool.get("depositors", {})
-
-        if sender not in depositors:
-            raise Exception("No deposit found")
-
-        if int(depositors.get(sender, 0)) < amount:
-            raise Exception("Insufficient deposit balance")
-
-        if int(pool.get("available_liquidity", 0)) < amount:
-            raise Exception("Insufficient available liquidity")
-
-        depositors[sender] = int(depositors.get(sender, 0)) - amount
-        pool["depositors"] = depositors
-        pool["available_liquidity"] = int(pool.get("available_liquidity", 0)) - amount
-        pool["total_deposited"] = max(0, int(pool.get("total_deposited", 0)) - amount)
-
-        self._save_pool(pool_id, pool)
-
-        lender = self._get_lender(sender)
-
-        if lender != {}:
-            lender["total_deposited"] = max(0, int(lender.get("total_deposited", 0)) - amount)
-            self._save_lender(sender, lender)
-
-        treasury = self._get_treasury()
-        treasury["total_deposited"] = max(0, int(treasury.get("total_deposited", 0)) - amount)
-        self._save_treasury(treasury)
-
-    @gl.public.write
-    def close_pool(self, pool_id: str) -> None:
-        self._require_owner()
-
-        pool = self._get_pool(pool_id)
-
-        if pool == {}:
-            raise Exception("Pool not found")
-
-        if int(pool.get("active_loans", 0)) > 0:
-            raise Exception("Pool has active loans")
-
-        pool["status"] = "CLOSED"
-        pool["closed_at"] = self._now()
-
-        self._save_pool(pool_id, pool)
-
-    @gl.public.write
-    def withdraw_protocol_fees(self, amount: u256) -> None:
-        self._require_owner()
+        if recipient == "":
+            raise gl.vm.UserError("Recipient required")
 
         fees = self._get_protocol_fees()
-        value = int(amount)
+        value = int(amount_wei)
 
-        if int(fees.get("total_collected", 0)) < value:
-            raise Exception("Insufficient fees")
+        if int(fees.get("total_collected_wei", 0)) < value:
+            raise gl.vm.UserError("Insufficient protocol fees")
 
-        fees["total_collected"] = int(fees.get("total_collected", 0)) - value
+        if int(self.balance) < value:
+            raise gl.vm.UserError("Contract GEN balance is insufficient")
+
+        fees["total_collected_wei"] = int(fees.get("total_collected_wei", 0)) - value
         fees["last_withdrawn"] = self._now()
 
         self._save_protocol_fees(fees)
+
+        self._send_gen(recipient, amount_wei)
 
     # ---------------------------------------------------------------------
     # AI assessment internals
@@ -778,7 +894,7 @@ Return ONLY valid JSON:
     def _evaluate_creditworthiness(
         self,
         sender: str,
-        amount_usd: u256,
+        amount_wei: u256,
         duration_days: u256,
         loan_type: str,
         purpose: str,
@@ -815,7 +931,7 @@ Return ONLY valid JSON:
 
         income_score = self._calculate_income_score(
             monthly_income_usd,
-            amount_usd,
+            amount_wei,
             avg_balance_usd,
         )
 
@@ -826,13 +942,21 @@ Return ONLY valid JSON:
 
         result = yield gl.eq_principle.prompt_non_comparative(
             f"""
-You are an AI credit analyst for CredLayer, a DeFi under-collateralized lending protocol.
+You are an AI credit analyst for CredLayer, a GenLayer-native GEN lending protocol.
 
-Evaluate this loan application and return a detailed credit assessment.
+Evaluate this loan application.
+
+IMPORTANT:
+- The requested loan amount is denominated in wei.
+- GEN has 18 decimals.
+- 1 GEN = 10^18 wei.
+- Return all money fields as wei integers.
+- Interest rate must be returned in basis points.
+- Collateral ratio must be returned in basis points.
 
 APPLICANT DATA:
 - Wallet address: {sender}
-- Requested amount: ${amount_usd} USD
+- Requested amount: {amount_wei} wei
 - Loan duration: {duration_days} days
 - Loan type: {loan_type}
 - Purpose: {purpose}
@@ -868,9 +992,9 @@ Return ONLY valid JSON:
   "decision": "APPROVE" or "REJECT",
   "credit_score": 500,
   "risk_level": "LOW" or "MEDIUM" or "HIGH" or "CRITICAL",
-  "max_loan_amount": 0,
-  "required_collateral_ratio": 70,
-  "interest_rate": 15,
+  "max_loan_amount_wei": 0,
+  "required_collateral_ratio_bps": 7000,
+  "interest_rate_bps": 1500,
   "confidence": 0,
   "reasoning": "concise explanation",
   "positive_factors": [],
@@ -896,17 +1020,20 @@ Return ONLY valid JSON:
         if assessment.get("risk_level") not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
             assessment["risk_level"] = "HIGH"
 
-        if "interest_rate" not in assessment:
-            assessment["interest_rate"] = self._calculate_interest_rate(
+        if "interest_rate_bps" not in assessment:
+            assessment["interest_rate_bps"] = self._calculate_interest_rate_bps(
                 int(assessment["credit_score"]),
                 assessment["risk_level"],
             )
 
-        if "required_collateral_ratio" not in assessment:
-            assessment["required_collateral_ratio"] = self._calculate_collateral_ratio(
+        if "required_collateral_ratio_bps" not in assessment:
+            assessment["required_collateral_ratio_bps"] = self._calculate_collateral_ratio_bps(
                 int(assessment["credit_score"]),
                 assessment["risk_level"],
             )
+
+        if "max_loan_amount_wei" not in assessment:
+            assessment["max_loan_amount_wei"] = int(amount_wei)
 
         return assessment
 
@@ -975,25 +1102,20 @@ LOW, MEDIUM, HIGH, or CRITICAL
 
     def _calculate_income_score(
         self,
-        monthly_income: u256,
-        loan_amount: u256,
-        avg_balance: u256,
+        monthly_income_usd: u256,
+        loan_amount_wei: u256,
+        avg_balance_usd: u256,
     ) -> int:
-        if int(monthly_income) == 0:
+        if int(monthly_income_usd) == 0:
             return 10
 
-        dti = int(loan_amount) * 100 // (int(monthly_income) * 12)
+        if int(avg_balance_usd) == 0:
+            return 40
 
-        if dti > 50:
-            return 20
-
-        if dti > 30:
+        if int(avg_balance_usd) < int(monthly_income_usd):
             return 50
 
-        if dti > 20:
-            return 70
-
-        return 90
+        return 80
 
     def _calculate_governance_score(
         self,
@@ -1032,38 +1154,38 @@ LOW, MEDIUM, HIGH, or CRITICAL
 
         return (identity + repayment + wallet_trust + income + governance) // 100
 
-    def _calculate_interest_rate(self, credit_score: int, risk_level: str) -> int:
+    def _calculate_interest_rate_bps(self, credit_score: int, risk_level: str) -> int:
         base_rates = {
-            "LOW": 5,
-            "MEDIUM": 9,
-            "HIGH": 15,
-            "CRITICAL": 25,
+            "LOW": 500,
+            "MEDIUM": 900,
+            "HIGH": 1500,
+            "CRITICAL": 2500,
         }
 
-        base = base_rates.get(risk_level, 15)
-        adjustment = max(0, (750 - credit_score) // 50)
+        base = base_rates.get(risk_level, 1500)
+        adjustment = max(0, (750 - credit_score) // 50) * 100
 
         return base + adjustment
 
-    def _calculate_collateral_ratio(
+    def _calculate_collateral_ratio_bps(
         self,
         credit_score: int,
         risk_level: str,
     ) -> int:
         ratios = {
-            "LOW": 20,
-            "MEDIUM": 40,
-            "HIGH": 70,
-            "CRITICAL": 100,
+            "LOW": 2000,
+            "MEDIUM": 4000,
+            "HIGH": 7000,
+            "CRITICAL": 10000,
         }
 
-        base = ratios.get(risk_level, 50)
+        base = ratios.get(risk_level, 5000)
 
         if credit_score > 750:
-            base = max(0, base - 10)
+            base = max(0, base - 1000)
 
         if credit_score < 500:
-            base = min(100, base + 20)
+            base = min(10000, base + 2000)
 
         return base
 
@@ -1112,6 +1234,10 @@ LOW, MEDIUM, HIGH, or CRITICAL
     @gl.public.view
     def get_protocol_fees(self) -> dict:
         return self._get_protocol_fees()
+
+    @gl.public.view
+    def get_contract_balance_wei(self) -> u256:
+        return self.balance
 
     @gl.public.view
     def get_repayment_history(self, wallet: str) -> list:
